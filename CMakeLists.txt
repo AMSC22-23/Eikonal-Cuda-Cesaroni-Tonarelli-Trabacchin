@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
 
 include_directories(src)
-add_executable(main test/main.cu src/Mesh.cu src/Mesh.cu)
+add_executable(main test/main.cu src/Mesh.cu src/Mesh.cu src/MultiDomainMesh.cu src/Kernels.cu)
 
 set_target_properties(main PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)

@@ -47,11 +47,11 @@ public:
     }
 
     std::vector<int> getNeighbors(size_t vertex) const {
-        std::set<int> neighbors;
+        std::set<int> n;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
-            neighbors.insert(shapes[i]);
+            n.insert(shapes[i]);
         }
-        std::vector<int> res(neighbors.begin(), neighbors.end());
+        std::vector<int> res(n.begin(), n.end());
         return res;
     }
 
@@ -94,6 +94,14 @@ public:
             }
         }
         return min_vertex;
+    }
+
+    const std::vector<int>& getVectorNeighbors() const{
+        return neighbors;
+    }
+
+    const std::vector<int>& getVectorNeighborsIndices() const{
+        return indices;
     }
 
 protected:
@@ -209,6 +217,12 @@ protected:
 
             }
             mesh_file.close();
+            indices.resize(getNumberVertices());
+            for(int i = 0; i < getNumberVertices(); i++){
+                indices[i] = neighbors.size();
+                std::vector<int> n = getNeighbors(i);
+                neighbors.insert(neighbors.end(), n.begin(), n.end());
+            }
         } else {
             std::cout << "Couldn't open mesh file." << std::endl;
         }
@@ -218,6 +232,8 @@ protected:
     std::vector<double> geo;
     std::vector<int> shapes;
     std::vector<int> ngh;
+    std::vector<int> neighbors;
+    std::vector<int> indices;
     int vertices_per_shape = 0;
     std::vector<int> map_vertices;
     std::string filename_input_mesh;
