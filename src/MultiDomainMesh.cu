@@ -11,6 +11,6 @@ public:
 private:
 
     void partition_mesh(const Mesh<D>* mesh, int n) {
-        partition_mesh_host(mesh->getVectorNeighbors(), mesh->getVectorNeighborsIndices(), int n);
+        partition_mesh_host(mesh->getVectorNeighbors(), mesh->getVectorNeighborsIndices(), n);
     }
 };
