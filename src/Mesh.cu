@@ -217,12 +217,7 @@ protected:
 
             }
             mesh_file.close();
-            indices.resize(getNumberVertices());
-            for(int i = 0; i < getNumberVertices(); i++){
-                indices[i] = neighbors.size();
-                std::vector<int> n = getNeighbors(i);
-                neighbors.insert(neighbors.end(), n.begin(), n.end());
-            }
+
         } else {
             std::cout << "Couldn't open mesh file." << std::endl;
         }
