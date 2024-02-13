@@ -1,6 +1,8 @@
+
+#ifndef EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_MULTI_DOMAIN_MESH_H
+#define EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_MULTI_DOMAIN_MESH_H
 #include "Mesh.cu"
 #include "Kernels.cu"
-#include <random>
 
 template<int D>
 class MultiDomainMesh {
@@ -14,3 +16,4 @@ private:
         partition_mesh_host(mesh->getVectorNeighbors(), mesh->getVectorNeighborsIndices(), n);
     }
 };
+#endif
