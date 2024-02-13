@@ -1,5 +1,4 @@
 #include "MultiDomainMesh.cu"
-#include "TetrahedricalMesh.cu"
 
 int main() {
     Mesh<3> mesh("../test/meshes/input_meshes/cube-20.vtk");
