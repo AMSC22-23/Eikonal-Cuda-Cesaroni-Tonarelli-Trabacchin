@@ -1,4 +1,3 @@
-
 #ifndef KERNELS
 #define KERNELS
 #include <vector>
