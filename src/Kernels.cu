@@ -46,8 +46,8 @@ void partition_mesh_host(std::vector<int>* neighbors, std::vector<int>* indices,
     cudaMalloc(&indices_gpu, dim_d * sizeof(int));
     cudaMemcpy(indices_gpu, indices, dim_d * sizeof(int), cudaMemcpyHostToDevice);
     //allocate and initialize neighbors
-    cudaMalloc(&neighbors_gpu, dim_d * sizeof(int));
-    cudaMemcpy(neighbors_gpu, neighbors, dim_d * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMalloc(&neighbors_gpu, dim_ne * sizeof(int));
+    cudaMemcpy(neighbors_gpu, neighbors, dim_ne * sizeof(int), cudaMemcpyHostToDevice);
     //allocate and initialize new_frontier (which will be assigned to frontier in the while loop)
     cudaMalloc(&new_frontier_gpu, dim_d * sizeof(int));
     cudaMemcpy(new_frontier_gpu, new_frontier_cpu, dim_d * sizeof(int), cudaMemcpyHostToDevice);
@@ -57,7 +57,7 @@ void partition_mesh_host(std::vector<int>* neighbors, std::vector<int>* indices,
 
     while(dim_f != 0){
         //copy new_frontier into frontier
-        cudaMemcpy(frontier_gpu, new_frontier_gpu, dim_d * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(frontier_gpu, new_frontier_gpu, dim_d * sizeof(int), cudaMemcpyDeviceToDevice);
         //copy dim_nf into dim_f
         cudaMemcpy(&dim_f, dim_nf, sizeof(int), cudaMemcpyDeviceToHost);
         //set dim_nf to zero
