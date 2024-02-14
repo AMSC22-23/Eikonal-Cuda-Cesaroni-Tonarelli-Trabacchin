@@ -22,6 +22,7 @@ public:
         std::vector<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
         int cont = 0;
         for(int i=0; i < getNumberVertices(); i++) {
+            std::set<std::set<int>> ngh_set;
             Mesh<D>::ngh[i] = cont;
             for(const auto& x: sets[i]){
                 std::vector<int> tmp (std::min(sets[i].size(), sets[x].size() ), 0);
@@ -37,23 +38,31 @@ public:
                 }
 
                 for(it = tmp.begin(); it != end; it++){
-                    if(*it > x) {
-                        std::vector<int>::iterator end2;
-                        std::vector<int> tmp2(std::min(current_set.size(), sets[*it].size()), 0);
-                        std::vector<int>::iterator it2;
-                        end2 = std::set_intersection(current_set.begin(), current_set.end(),
-                                                     sets[*it].begin(), sets[*it].end(),
-                                                     tmp2.begin());
-                        for(it2 = tmp2.begin(); it2 != end2; it2++){
-                            if(*it2 > *it){
-                                shapes.push_back(x);
-                                shapes.push_back(*it);
-                                shapes.push_back(*it2);
-                                cont += vertices_per_shape - 1;
-                            }
-                        }
+                    std::vector<int>::iterator end2;
+                    std::vector<int> tmp2(std::min(current_set.size(), sets[*it].size()), 0);
+                    std::vector<int>::iterator it2;
+                    end2 = std::set_intersection(current_set.begin(), current_set.end(),
+                                                 sets[*it].begin(), sets[*it].end(),
+                                                 tmp2.begin());
+                    for(it2 = tmp2.begin(); it2 != end2; it2++){
+                        //shapes.push_back(x);
+                        //shapes.push_back(*it);
+                        //shapes.push_back(*it2);
 
+                        //cont += vertices_per_shape - 1;
+                        std::set<int> group;
+                        group.insert(x);
+                        group.insert(*it);
+                        group.insert(*it2);
+                        auto[iterator, inserted] = ngh_set.insert(group);
+                        if(inserted) {
+                            cont += vertices_per_shape - 1;
+                            shapes.push_back(x);
+                            shapes.push_back(*it);
+                            shapes.push_back(*it2);
+                        }
                     }
+
                 }
             }
         }
