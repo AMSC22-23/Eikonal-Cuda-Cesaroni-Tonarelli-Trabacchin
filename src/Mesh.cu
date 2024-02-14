@@ -19,51 +19,34 @@ class Mesh {
 public:
 
     Mesh(const std::string& mesh_file_path) {
-        std::vector<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
-        int cont = 0;
-        for(int i=0; i < getNumberVertices(); i++) {
-            std::set<std::set<int>> ngh_set;
-            Mesh<D>::ngh[i] = cont;
-            for(const auto& x: sets[i]){
-                std::vector<int> tmp (std::min(sets[i].size(), sets[x].size() ), 0);
-                std::vector<int>::iterator end;
-                end = std::set_intersection(sets[i].begin(), sets[i].end(),
-                                            sets[x].begin(), sets[x].end(),
-                                            tmp.begin());
-                std::vector<int>::iterator it;
-                std::set<int> current_set;
+        std::set<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
+        std::vector<std::vector<int>> g;
+        g.resize(getNumberVertices());
+        for(auto &s : sets) {
+            for(auto &j : s) {
+                for(auto &i : s) {
+                    if(i != j) {
+                        g[j].push_back(i);
 
-                for(it=tmp.begin(); it!=end; it++){
-                    current_set.insert(*it);
-                }
-
-                for(it = tmp.begin(); it != end; it++){
-                    std::vector<int>::iterator end2;
-                    std::vector<int> tmp2(std::min(current_set.size(), sets[*it].size()), 0);
-                    std::vector<int>::iterator it2;
-                    end2 = std::set_intersection(current_set.begin(), current_set.end(),
-                                                 sets[*it].begin(), sets[*it].end(),
-                                                 tmp2.begin());
-                    for(it2 = tmp2.begin(); it2 != end2; it2++){
-                        //shapes.push_back(x);
-                        //shapes.push_back(*it);
-                        //shapes.push_back(*it2);
-
-                        //cont += vertices_per_shape - 1;
-                        std::set<int> group;
-                        group.insert(x);
-                        group.insert(*it);
-                        group.insert(*it2);
-                        auto[iterator, inserted] = ngh_set.insert(group);
-                        if(inserted) {
-                            cont += vertices_per_shape - 1;
-                            shapes.push_back(x);
-                            shapes.push_back(*it);
-                            shapes.push_back(*it2);
-                        }
                     }
-
                 }
+            }
+        }
+
+        ngh.resize(getNumberVertices());
+        ngh[0] = 0;
+        int cont = 0;
+        for(int i = 1; i < ngh.size(); i++) {
+            ngh[i] = ngh[i-1] + g[i - 1].size();
+            cont += g[i-1].size();
+        }
+        cont += g[ngh.size()-1].size();
+        shapes.resize(cont);
+        cont = 0;
+        for(auto &x : g) {
+            for(auto &y : x) {
+                shapes[cont] = y;
+                cont++;
             }
         }
         indices.resize(getNumberVertices());
@@ -71,7 +54,6 @@ public:
             indices[i] = neighbors.size();
             std::vector<int> n = getNeighbors(i);
             neighbors.insert(neighbors.end(), n.begin(), n.end());
-
         }
     }
 
@@ -127,17 +109,7 @@ public:
         return coord;
     }
 
-    int getMapVertex(int vertex) const {
-        return map_vertices[vertex];
-    }
 
-    int getOriginalNumberOfVertices() const{
-        return map_vertices.size();
-    }
-
-    std::string getFilenameInputMesh() const {
-        return filename_input_mesh;
-    }
 
     int getNearestVertex(std::array<double, D> coordinates) const {
         double min_distance = std::numeric_limits<double>::max();
@@ -178,37 +150,9 @@ public:
 
     }
 
+
+
     void getSolutionsVTK(const std::string& output_file_name, int* solutions){
-        std::ofstream output_file(output_file_name);
-
-        std::string input = getFilenameInputMesh();
-        std::ifstream input_file(input);
-
-        std::string line;
-        if (input_file && output_file) {
-            while (std::getline(input_file, line)) {
-                output_file << line << "\n";
-            }
-        }
-        else {
-            printf("Cannot read File");
-        }
-        input_file.close();
-
-        output_file << "POINT_DATA " << getOriginalNumberOfVertices() << std::endl;
-        output_file << "SCALARS solution double 1" << std::endl;
-        output_file << "LOOKUP_TABLE default" << std::endl;
-        for(int i = 0; i < getOriginalNumberOfVertices(); i++){
-            double solution = solutions[getMapVertex(i)];
-            output_file << solution << " ";
-        }
-        output_file << std::endl;
-        output_file.flush();
-
-        output_file.close();
-    }
-
-    void getSolutionsVTK2(const std::string& output_file_name, int* solutions){
         std::ofstream output_file(output_file_name);
 
         //header
@@ -230,7 +174,7 @@ public:
         /*auto [num_shapes, str] = getStringMeshShapes();
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
         output_file << str << std::endl;*/
-        std::set<std::set<int>> s = nonloso();
+        std::set<std::set<int>> s = retrieveShapes();
         int num_shapes = s.size();
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
         for(auto x: s){
@@ -273,7 +217,8 @@ protected:
         return res;
     }
 
-    void removeDuplicateVertices(){
+    std::vector<int> removeDuplicateVertices(){
+        std::vector<int> map_vertices;
         std::vector<int> pos;
         pos.resize(geo.size()/D);
         std::iota(pos.begin(), pos.end(),0);
@@ -307,6 +252,7 @@ protected:
             same.clear();
         }
         geo = reduced_geo;
+        return map_vertices;
     }
 
     int verticesCompare(int i, int j) const {
@@ -320,11 +266,10 @@ protected:
         return 0;
     }
 
-    std::vector<std::set<int>> init_mesh(const std::string& mesh_file_path, int vertices_per_shape_) {
-        filename_input_mesh = mesh_file_path;
+    std::set<std::set<int>> init_mesh(const std::string& mesh_file_path, int vertices_per_shape_) {
+        std::set<std::set<int>> sets;
         vertices_per_shape = vertices_per_shape_;
         std::ifstream mesh_file (mesh_file_path);
-        std::vector<std::set<int>> sets;
         if(mesh_file.is_open()) {
             std::string buffer;
 
@@ -347,7 +292,7 @@ protected:
                 }
 
             }
-            removeDuplicateVertices();
+            std::vector<int> map_vertices = removeDuplicateVertices();
 
 
             vertices_number = geo.size()/D;
@@ -355,23 +300,16 @@ protected:
             int triangle_number;
             mesh_file>>triangle_number;
             mesh_file>>buffer;
-            sets.resize(vertices_number);
             ngh.resize(vertices_number);
+            int num;
             for(int i=0; i<triangle_number; i++){
                 mesh_file>>buffer;
-                std::vector<int> tmp;
-                tmp.resize(vertices_per_shape);
+                std::set<int> tmp;
                 for(int j=0; j<vertices_per_shape; j++){
-                    mesh_file>>tmp[j];
-                    tmp[j] = map_vertices[tmp[j]];
+                    mesh_file>>num;
+                    tmp.insert(map_vertices[num]);
                 }
-                for(int j=0; j < vertices_per_shape; j++){
-                    for(int k=0; k < vertices_per_shape; k++){
-                        if(j!=k){
-                            sets[tmp[j]].insert(tmp[k]);
-                        }
-                    }
-                }
+                sets.insert(tmp);
 
             }
             mesh_file.close();
@@ -382,17 +320,17 @@ protected:
         return sets;
     }
 
+
     std::vector<double> geo;
     std::vector<int> shapes;
     std::vector<int> ngh;
     std::vector<int> neighbors;
     std::vector<int> indices;
     int vertices_per_shape = 0;
-    std::vector<int> map_vertices;
-    std::string filename_input_mesh;
 
 private:
-    std::set<std::set<int>> nonloso(){
+    std::set<std::set<int>> retrieveShapes(){
+
         std::set<std::set<int>> s;
         for(int i = 0; i < this->getNumberVertices(); i++) {
             int begin = ngh[i];
@@ -409,56 +347,5 @@ private:
         return s;
     }
 
-
-    std::tuple<int, std::string> getStringMeshShapes(){
-        bool flag = false;
-        std::set<std::set<int>> s;
-        int num_shapes = 0;
-        std::string res;
-
-        for(int i = 0; i < this->getNumberVertices(); i++) {
-            int begin = ngh[i];
-            int end = (i == this->getNumberVertices() - 1) ? shapes.size(): ngh[i+1];
-
-            for(int j = begin; j < end; j+=D) {
-                flag = false;
-                std::set<int> tmp;
-                tmp.insert(i);
-                for (int k = 0; k < D; k++) {
-                    if(shapes[j + k] < i) {
-                        flag = true;
-                    }
-                    tmp.insert(shapes[j + k]);
-                }
-
-                if(flag){
-                    std::cout << "flag true" << std::endl;
-                    if(s.find(tmp) == s.end()){
-                        std::cout << "NON CONTENUTO!!!!\n";
-                        flag = false;
-                    }
-                }
-                else
-                {
-                    if(s.find(tmp) != s.end()) {
-                        std::cout << "GIA' CONTENUTO!\n";
-                        flag = true;
-                    }
-                }
-
-
-                if (!flag) {
-                    num_shapes++;
-                    res.append(std::to_string(D + 1) + "    " + std::to_string(i));
-                    for (int k = 0; k < D; k++) {
-                        res.append("  " + std::to_string(shapes[j + k]));
-                    }
-                    s.insert(tmp);
-                    res.append("\n");
-                }
-            }
-        }
-        return {num_shapes, res};
-    }
 };
 #endif
