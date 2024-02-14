@@ -13,12 +13,13 @@
 #include <cmath>
 #include <tuple>
 #include <cassert>
+#include <cstdlib>
 
 template <int D>
 class Mesh {
 public:
 
-    Mesh(const std::string& mesh_file_path) {
+    Mesh(const std::string& mesh_file_path, const std::string& partition_file_path) {
         std::set<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -49,12 +50,21 @@ public:
                 cont++;
             }
         }
+
+
+
         indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
             indices[i] = neighbors.size();
             std::vector<int> n = getNeighbors(i);
             neighbors.insert(neighbors.end(), n.begin(), n.end());
         }
+    }
+
+    std::vector<int> execute_metis(int nparts) {
+        print_file_metis();
+        system(("../lib/METIS/build/programs/gpmetis ../../../../cmake-build-debug/metis_input.txt " + std::to_string(nparts)).c_str());
+
     }
 
     std::string toString() {
@@ -217,6 +227,62 @@ protected:
         return res;
     }
 
+
+    void reorderPartitions(std::vector<int> partitions_vector) {
+        std::vector<int> map_vertices;
+        std::vector<int> pos;
+        pos.resize(geo.size()/D);
+        std::iota(pos.begin(), pos.end(),0);
+        std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { if(partitions_vector[i] == partitions_vector[j]) {return 0;} else if(partitions_vector[i] < partitions_vector[j]) {return 1;} else{return -1;}});
+        size_t current_index = 0;
+        size_t prec;
+        std::vector<int> same;
+        std::vector<double> reduced_geo;
+        reduced_geo.resize(0);
+        map_vertices.resize(geo.size() / D);
+        std::vector<int> reordered_shapes(shapes.size());
+        std::vector<int> reordered_ngh(ngh.size());
+        int cont_shapes = 0;
+        int cont_ngh = 0;
+        int cont_partitions = 0;
+        reordered_ngh[0] = 0;
+        while(current_index < pos.size()){
+            prec = current_index;
+            current_index++;
+            same.push_back(pos[prec]);
+            while(true){
+                if( current_index < pos.size() && partitions_vector[pos[prec]] == partitions_vector[pos[current_index]]){
+                    same.push_back(pos[current_index]);
+                    current_index++;
+                } else{
+                    partitions[cont_partitions] = current_index;
+                    cont_partitions++;
+                    for(int j : same){
+                        map_vertices[j] = (int)reduced_geo.size() / D;
+                        for(int i = 0; i < D; i++) {
+                            reduced_geo.push_back(geo[j*D+i]);
+                        }
+                        int begin = ngh[pos[j]];
+                        int end = (pos[j] != ngh.size() - 1)?ngh[pos[j] + 1]:ngh.size();
+                        ngh[cont_ngh] = cont_shapes;
+                        for(int i = begin; i < end; i++) {
+                            reordered_shapes[cont_shapes + i - begin] = shapes[i];
+                            cont_shapes++;
+                        }
+                        cont_ngh++;
+                    }
+
+                    break;
+                }
+            }
+            same.clear();
+        }
+        geo = reduced_geo;
+        shapes = reordered_shapes;
+        ngh = reordered_ngh;
+    }
+
+
     std::vector<int> removeDuplicateVertices(){
         std::vector<int> map_vertices;
         std::vector<int> pos;
@@ -324,6 +390,9 @@ protected:
     std::vector<double> geo;
     std::vector<int> shapes;
     std::vector<int> ngh;
+    std::vector<int> partitions;
+
+
     std::vector<int> neighbors;
     std::vector<int> indices;
     int vertices_per_shape = 0;
@@ -346,6 +415,8 @@ private:
         }
         return s;
     }
+
+
 
 };
 #endif
