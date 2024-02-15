@@ -51,15 +51,7 @@ public:
             }
         }
 
-
-
         execute_metis();
-        indices.resize(getNumberVertices());
-        for(int i = 0; i < getNumberVertices(); i++){
-            indices[i] = neighbors.size();
-            std::vector<int> n = getNeighbors(i);
-            neighbors.insert(neighbors.end(), n.begin(), n.end());
-        }
     }
 
     void execute_metis() {
@@ -121,8 +113,6 @@ public:
         return coord;
     }
 
-
-
     int getNearestVertex(std::array<double, D> coordinates) const {
         double min_distance = std::numeric_limits<double>::max();
         int min_vertex = 0;
@@ -136,17 +126,8 @@ public:
         return min_vertex;
     }
 
-    const std::vector<int>& getVectorNeighbors() const{
-        return neighbors;
-    }
-
-    const std::vector<int>& getVectorNeighborsIndices() const{
-        return indices;
-    }
-
     void print_file_metis(){
         std::ofstream output_file("metis_input.txt");
-        //output_file << this->shapes.size()/D << std::endl;
         std::set<std::set<int>> element_set = this->retrieveShapes();
         output_file << element_set.size() << std::endl;
         for(auto &s : element_set) {
@@ -157,19 +138,6 @@ public:
         }
         output_file.close();
         return;
-        for(int i = 0; i < this->getNumberVertices(); i++) {
-            int begin = ngh[i];
-            int end = (i == this->getNumberVertices() - 1)?shapes.size():ngh[i+1];
-            for(int j = begin; j < end; j++) {
-                output_file << i << " ";
-                for (int k = 0; k < D; k++) {
-                    output_file << shapes[j + k] << " ";
-                }
-                output_file << std::endl;
-            }
-
-        }
-
     }
 
     std::vector<int> read_metis_output() {
@@ -181,8 +149,6 @@ public:
         mesh_file.close();
         return parts;
     }
-
-
 
     void getSolutionsVTK(const std::string& output_file_name, int* solutions){
         std::ofstream output_file(output_file_name);
@@ -203,9 +169,6 @@ public:
         output_file << "\n";
 
         //  cells
-        /*auto [num_shapes, str] = getStringMeshShapes();
-        output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
-        output_file << str << std::endl;*/
         std::set<std::set<int>> s = retrieveShapes();
         int num_shapes = s.size();
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
@@ -250,7 +213,6 @@ protected:
         return res;
     }
 
-
     void reorderPartitions(std::vector<int> partitions_vector) {
         partitions.resize(partitions_number);
         std::vector<int> map_vertices;
@@ -285,7 +247,6 @@ protected:
                     partitions[cont_partitions] = current_index;
                     cont_partitions++;
                     for(int j : same){
-                        //map_vertices[j] = (int)reordered_geo.size() / D;
                         for(int i = 0; i < D; i++) {
                             reordered_geo.push_back(geo[j*D+i]);
                         }
@@ -296,10 +257,8 @@ protected:
                             reordered_shapes[cont_shapes] = map_vertices[shapes[i]];
                             cont_shapes++;
                         }
-
                         cont_ngh++;
                     }
-
                     break;
                 }
             }
@@ -309,10 +268,7 @@ protected:
         geo = reordered_geo;
         shapes = reordered_shapes;
         ngh = reordered_ngh;
-
-
     }
-
 
     std::vector<int> removeDuplicateVertices(){
         std::vector<int> map_vertices;
@@ -361,6 +317,23 @@ protected:
             }
         }
         return 0;
+    }
+
+    std::set<std::set<int>> retrieveShapes(){
+        std::set<std::set<int>> s;
+        for(int i = 0; i < this->getNumberVertices(); i++) {
+            int begin = ngh[i];
+            int end = (i == this->getNumberVertices() - 1) ? shapes.size() : ngh[i + 1];
+            for(int j = begin; j < end; j+=D){
+                std::set<int> tmp;
+                tmp.insert(i);
+                for (int k = 0; k < D; k++) {
+                    tmp.insert(shapes[j + k]);
+                }
+                s.insert(tmp);
+            }
+        }
+        return s;
     }
 
     std::set<std::set<int>> init_mesh(const std::string& mesh_file_path, int vertices_per_shape_) {
@@ -417,40 +390,12 @@ protected:
         return sets;
     }
 
-
     std::vector<double> geo;
     std::vector<int> shapes;
     std::vector<int> ngh;
-    //std::vector<int> partitions;
-    int partitions_number;
-
-
-    std::vector<int> neighbors;
-    std::vector<int> indices;
-    int vertices_per_shape = 0;
-public:
     std::vector<int> partitions;
-
-private:
-    std::set<std::set<int>> retrieveShapes(){
-
-        std::set<std::set<int>> s;
-        for(int i = 0; i < this->getNumberVertices(); i++) {
-            int begin = ngh[i];
-            int end = (i == this->getNumberVertices() - 1) ? shapes.size() : ngh[i + 1];
-            for(int j = begin; j < end; j+=D){
-                std::set<int> tmp;
-                tmp.insert(i);
-                for (int k = 0; k < D; k++) {
-                    tmp.insert(shapes[j + k]);
-                }
-                s.insert(tmp);
-            }
-        }
-        return s;
-    }
-
-
+    int partitions_number;
+    int vertices_per_shape = 0;
 
 };
 #endif
