@@ -53,7 +53,7 @@ public:
 
 
 
-        execute_metis();
+        //execute_metis();
         indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
             indices[i] = neighbors.size();
@@ -260,8 +260,8 @@ protected:
         size_t current_index = 0;
         size_t prec;
         std::vector<int> same;
-        std::vector<double> reduced_geo;
-        reduced_geo.resize(0);
+        std::vector<double> reordered_geo;
+        reordered_geo.resize(0);
         map_vertices.resize(geo.size() / D);
         std::vector<int> reordered_shapes(shapes.size());
         std::vector<int> reordered_ngh(ngh.size());
@@ -269,6 +269,9 @@ protected:
         int cont_ngh = 0;
         int cont_partitions = 0;
         reordered_ngh[0] = 0;
+        for(int i = 0; i < pos.size(); i++) {
+            map_vertices[pos[i]] = i;
+        }
         while(current_index < pos.size()){
             prec = current_index;
             current_index++;
@@ -278,12 +281,12 @@ protected:
                     same.push_back(pos[current_index]);
                     current_index++;
                 } else{
-                    partitions.at(cont_partitions) = current_index;
+                    partitions[cont_partitions] = current_index;
                     cont_partitions++;
                     for(int j : same){
-                        map_vertices[j] = (int)reduced_geo.size() / D;
+                        //map_vertices[j] = (int)reordered_geo.size() / D;
                         for(int i = 0; i < D; i++) {
-                            reduced_geo.push_back(geo[j*D+i]);
+                            reordered_geo.push_back(geo[j*D+i]);
                         }
                         int begin = ngh[j];
                         int end = (j != ngh.size() - 1) ? ngh[j + 1] : shapes.size();
@@ -292,6 +295,7 @@ protected:
                             reordered_shapes[cont_shapes] = map_vertices[shapes[i]];
                             cont_shapes++;
                         }
+
                         cont_ngh++;
                     }
 
@@ -301,7 +305,7 @@ protected:
             same.clear();
         }
 
-        geo = reduced_geo;
+        geo = reordered_geo;
         shapes = reordered_shapes;
         ngh = reordered_ngh;
 
