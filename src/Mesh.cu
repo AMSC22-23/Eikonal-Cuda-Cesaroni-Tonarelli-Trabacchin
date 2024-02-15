@@ -53,7 +53,7 @@ public:
 
 
 
-        //execute_metis();
+        execute_metis();
         indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
             indices[i] = neighbors.size();
@@ -64,7 +64,7 @@ public:
 
     void execute_metis() {
         print_file_metis();
-        system(("../lib/METIS/build/programs/mpmetis metis_input.txt " + std::to_string(partitions_number)).c_str());
+        system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number)).c_str());
         std::vector<int> parts = read_metis_output();
         reorderPartitions(parts);
     }
@@ -219,6 +219,7 @@ public:
 
         // cell_types
         int n = 10;
+        std::cout << std::endl;
         output_file << "CELL_TYPES " << num_shapes << std::endl;
         for(int i = 0; i < num_shapes; i++){
             output_file << n << " ";
@@ -420,13 +421,15 @@ protected:
     std::vector<double> geo;
     std::vector<int> shapes;
     std::vector<int> ngh;
-    std::vector<int> partitions;
+    //std::vector<int> partitions;
     int partitions_number;
 
 
     std::vector<int> neighbors;
     std::vector<int> indices;
     int vertices_per_shape = 0;
+public:
+    std::vector<int> partitions;
 
 private:
     std::set<std::set<int>> retrieveShapes(){
