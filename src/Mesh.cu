@@ -251,7 +251,7 @@ protected:
 
 
     void reorderPartitions(std::vector<int> partitions_vector) {
-        partitions_vector.resize(partitions_number);
+        partitions.resize(partitions_number);
         std::vector<int> map_vertices;
         std::vector<int> pos;
         pos.resize(partitions_vector.size());
@@ -278,18 +278,18 @@ protected:
                     same.push_back(pos[current_index]);
                     current_index++;
                 } else{
-                    partitions[cont_partitions] = current_index;
+                    partitions.at(cont_partitions) = current_index;
                     cont_partitions++;
                     for(int j : same){
                         map_vertices[j] = (int)reduced_geo.size() / D;
                         for(int i = 0; i < D; i++) {
                             reduced_geo.push_back(geo[j*D+i]);
                         }
-                        int begin = ngh[pos[j]];
-                        int end = (pos[j] != ngh.size() - 1)?ngh[pos[j] + 1]:ngh.size();
-                        ngh[cont_ngh] = cont_shapes;
+                        int begin = ngh[j];
+                        int end = (j != ngh.size() - 1) ? ngh[j + 1] : shapes.size();
+                        reordered_ngh[cont_ngh] = cont_shapes;
                         for(int i = begin; i < end; i++) {
-                            reordered_shapes[cont_shapes + i - begin] = shapes[i];
+                            reordered_shapes[cont_shapes] = map_vertices[shapes[i]];
                             cont_shapes++;
                         }
                         cont_ngh++;
@@ -300,9 +300,12 @@ protected:
             }
             same.clear();
         }
+
         geo = reduced_geo;
         shapes = reordered_shapes;
         ngh = reordered_ngh;
+
+
     }
 
 
