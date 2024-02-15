@@ -19,7 +19,7 @@ template <int D>
 class Mesh {
 public:
 
-    Mesh(const std::string& mesh_file_path, const std::string& partition_file_path) {
+    Mesh(const std::string& mesh_file_path, int nparts) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -53,6 +53,7 @@ public:
 
 
 
+        execute_metis();
         indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
             indices[i] = neighbors.size();
@@ -61,10 +62,11 @@ public:
         }
     }
 
-    std::vector<int> execute_metis(int nparts) {
+    void execute_metis() {
         print_file_metis();
-        system(("../lib/METIS/build/programs/gpmetis ../../../../cmake-build-debug/metis_input.txt " + std::to_string(nparts)).c_str());
-
+        system(("../lib/METIS/build/programs/mpmetis metis_input.txt " + std::to_string(partitions_number)).c_str());
+        std::vector<int> parts = read_metis_output();
+        reorderPartitions(parts);
     }
 
     std::string toString() {
@@ -142,9 +144,19 @@ public:
         return indices;
     }
 
-    void print_file_metis() const{
+    void print_file_metis(){
         std::ofstream output_file("metis_input.txt");
-        output_file << this->shapes.size()/D << std::endl;
+        //output_file << this->shapes.size()/D << std::endl;
+        std::set<std::set<int>> element_set = this->retrieveShapes();
+        output_file << element_set.size() << std::endl;
+        for(auto &s : element_set) {
+            for(auto &x : s) {
+                output_file << x+1 << " ";
+            }
+            output_file << std::endl;
+        }
+        output_file.close();
+        return;
         for(int i = 0; i < this->getNumberVertices(); i++) {
             int begin = ngh[i];
             int end = (i == this->getNumberVertices() - 1)?shapes.size():ngh[i+1];
@@ -158,6 +170,16 @@ public:
 
         }
 
+    }
+
+    std::vector<int> read_metis_output() {
+        std::ifstream mesh_file (("metis_input.txt.npart." + std::to_string(partitions_number)).c_str() );
+        std::vector<int> parts(getNumberVertices());
+        for(int & part : parts) {
+            mesh_file >> part;
+        }
+        mesh_file.close();
+        return parts;
     }
 
 
@@ -229,11 +251,12 @@ protected:
 
 
     void reorderPartitions(std::vector<int> partitions_vector) {
+        partitions_vector.resize(partitions_number);
         std::vector<int> map_vertices;
         std::vector<int> pos;
-        pos.resize(geo.size()/D);
+        pos.resize(partitions_vector.size());
         std::iota(pos.begin(), pos.end(),0);
-        std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { if(partitions_vector[i] == partitions_vector[j]) {return 0;} else if(partitions_vector[i] < partitions_vector[j]) {return 1;} else{return -1;}});
+        std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return partitions_vector[i] < partitions_vector[j];});
         size_t current_index = 0;
         size_t prec;
         std::vector<int> same;
@@ -391,6 +414,7 @@ protected:
     std::vector<int> shapes;
     std::vector<int> ngh;
     std::vector<int> partitions;
+    int partitions_number;
 
 
     std::vector<int> neighbors;
