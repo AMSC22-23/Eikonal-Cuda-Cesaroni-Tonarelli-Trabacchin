@@ -21,16 +21,21 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
+        tetra.resize(sets.size() * (D+1));
+        int i = 0;
+        for(auto &t : sets) {
+            int j = 0;
+            for(auto &v : t) {
+                tetra[i+j] = v;
+                j++;
+            }
+            i += D+1;
+        }
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
-        for(auto &s : sets) {
-            for(auto &j : s) {
-                for(auto &i : s) {
-                    if(i != j) {
-                        g[j].push_back(i);
-
-                    }
-                }
+        for(int i = 0; i < tetra.size(); i += D+1) {
+            for(int j = 0; j < D + 1; j++) {
+                g[tetra[j+i]].push_back(i/(D+1));
             }
         }
 
@@ -146,30 +151,24 @@ public:
 
     void print_file_metis(){
         std::ofstream output_file("metis_input.txt");
-        //output_file << this->shapes.size()/D << std::endl;
-        std::set<std::set<int>> element_set = this->retrieveShapes();
-        output_file << element_set.size() << std::endl;
+
+        output_file << tetra.size()/(D+1) << std::endl;
+
+        for(int i = 0; i < tetra.size(); i += D+1) {
+            for(int j = 0; j < D+1; j++) {
+                output_file << tetra[i+j] + 1 << " ";
+            }
+            output_file << std::endl;
+        }
+        /*
         for(auto &s : element_set) {
             for(auto &x : s) {
                 output_file << x+1 << " ";
             }
             output_file << std::endl;
         }
+         */
         output_file.close();
-        return;
-        for(int i = 0; i < this->getNumberVertices(); i++) {
-            int begin = ngh[i];
-            int end = (i == this->getNumberVertices() - 1)?shapes.size():ngh[i+1];
-            for(int j = begin; j < end; j++) {
-                output_file << i << " ";
-                for (int k = 0; k < D; k++) {
-                    output_file << shapes[j + k] << " ";
-                }
-                output_file << std::endl;
-            }
-
-        }
-
     }
 
     std::vector<int> read_metis_output() {
@@ -206,16 +205,27 @@ public:
         /*auto [num_shapes, str] = getStringMeshShapes();
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
         output_file << str << std::endl;*/
-        std::set<std::set<int>> s = retrieveShapes();
-        int num_shapes = s.size();
+        int num_shapes = tetra.size()/(D+1);
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
-        for(auto x: s){
+
+        for(int i = 0; i < tetra.size(); i += D+1) {
+            output_file << D+1 << " ";
+            for(int j = 0; j < D+1; j++) {
+                output_file << "  " << tetra[i+j];
+            }
+            output_file << std::endl;
+        }
+
+
+
+        /*for(auto x: s){
             output_file << D+1 << "  ";
             for(auto y: x){
                 output_file << "  " << y;
             }
             output_file << std::endl;
         }
+         */
 
         // cell_types
         int n = 10;
@@ -264,12 +274,12 @@ protected:
         std::vector<double> reordered_geo;
         reordered_geo.resize(0);
         map_vertices.resize(geo.size() / D);
-        std::vector<int> reordered_shapes(shapes.size());
-        std::vector<int> reordered_ngh(ngh.size());
+        //std::vector<int> reordered_shapes(shapes.size());
+        //std::vector<int> reordered_ngh(ngh.size());
         int cont_shapes = 0;
         int cont_ngh = 0;
         int cont_partitions = 0;
-        reordered_ngh[0] = 0;
+        //reordered_ngh[0] = 0;
         for(int i = 0; i < pos.size(); i++) {
             map_vertices[pos[i]] = i;
         }
@@ -289,6 +299,7 @@ protected:
                         for(int i = 0; i < D; i++) {
                             reordered_geo.push_back(geo[j*D+i]);
                         }
+                        /*
                         int begin = ngh[j];
                         int end = (j != ngh.size() - 1) ? ngh[j + 1] : shapes.size();
                         reordered_ngh[cont_ngh] = cont_shapes;
@@ -298,6 +309,7 @@ protected:
                         }
 
                         cont_ngh++;
+                        */
                     }
 
                     break;
@@ -306,9 +318,13 @@ protected:
             same.clear();
         }
 
+        for(auto &v : tetra) {
+            v = map_vertices[v];
+        }
+
         geo = reordered_geo;
-        shapes = reordered_shapes;
-        ngh = reordered_ngh;
+        //shapes = reordered_shapes;
+        //ngh = reordered_ngh;
 
 
     }
@@ -420,6 +436,7 @@ protected:
 
     std::vector<double> geo;
     std::vector<int> shapes;
+    std::vector<int> tetra;
     std::vector<int> ngh;
     //std::vector<int> partitions;
     int partitions_number;
@@ -430,27 +447,6 @@ protected:
     int vertices_per_shape = 0;
 public:
     std::vector<int> partitions;
-
-private:
-    std::set<std::set<int>> retrieveShapes(){
-
-        std::set<std::set<int>> s;
-        for(int i = 0; i < this->getNumberVertices(); i++) {
-            int begin = ngh[i];
-            int end = (i == this->getNumberVertices() - 1) ? shapes.size() : ngh[i + 1];
-            for(int j = begin; j < end; j+=D){
-                std::set<int> tmp;
-                tmp.insert(i);
-                for (int k = 0; k < D; k++) {
-                    tmp.insert(shapes[j + k]);
-                }
-                s.insert(tmp);
-            }
-        }
-        return s;
-    }
-
-
-
+    
 };
 #endif
