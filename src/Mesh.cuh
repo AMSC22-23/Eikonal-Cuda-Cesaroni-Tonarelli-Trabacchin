@@ -61,17 +61,15 @@ public:
             }
         }
 
-        std::vector<Matrix> tempM = readMatrices(matrix_file_path);
+        M = readMatrices(matrix_file_path);
         execute_metis();
-        indices.resize(getNumberVertices());
+        /*indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
             indices[i] = neighbors.size();
             std::vector<int> n = getNeighbors(i);
             neighbors.insert(neighbors.end(), n.begin(), n.end());
-        }
+        }*/
     }
-
-
 
     void execute_metis(std::vector<Matrix> tempM) {
         print_file_metis();
@@ -135,8 +133,6 @@ public:
         return coord;
     }
 
-
-
     int getNearestVertex(std::array<double, D> coordinates) const {
         double min_distance = std::numeric_limits<double>::max();
         int min_vertex = 0;
@@ -150,13 +146,13 @@ public:
         return min_vertex;
     }
 
-    const std::vector<int>& getVectorNeighbors() const{
+    /*const std::vector<int>& getVectorNeighbors() const{
         return neighbors;
     }
 
     const std::vector<int>& getVectorNeighborsIndices() const{
         return indices;
-    }
+    }*/
 
     void print_file_metis(){
         std::ofstream output_file("metis_input.txt");
@@ -199,8 +195,6 @@ public:
         mesh_file.close();
         return parts;
     }
-
-
 
     void getSolutionsVTK(const std::string& output_file_name, int* solutions){
         std::ofstream output_file(output_file_name);
@@ -279,16 +273,10 @@ public:
     const std::vector<int>& get_ngh() const {
         return ngh;
     }
+
     const std::vector<int>& get_partitions() const {
         return partitions_vertices;
     }
-
-
-
-
-
-
-
 
 
 protected:
@@ -340,7 +328,6 @@ protected:
             M[i*6+5]= e34.transpose()*tempM[pos[i]]*e34;
         }
     }
-
 
     void reorderPartitions(std::vector<int> partitions_vector) {
         partitions_vertices.resize(partitions_number);
@@ -409,7 +396,6 @@ protected:
 
 
     }
-
 
     std::vector<int> removeDuplicateVertices(){
         std::vector<int> map_vertices;
@@ -535,22 +521,21 @@ protected:
     }
 
 
-    std::vector<double> geo;
-    std::vector<int> shapes;
-    std::vector<int> tetra;
-    std::vector<int> ngh;
-    //std::vector<int> partitions_vertices;
-    int partitions_number;
+    std::vector<double> geo; // Coordinates of the vertices
+    std::vector<int> shapes; // For each vertex, the shapes associated to it (contains only the other three vertices in the shape)
+    std::vector<int> tetra; // Tetrahedra
+    std::vector<int> ngh; // Defines the boundaries in shapes
+    int partitions_number; // Number of partitions
 
-    std::vector<double> M; // TODO  da inizializzare
+    std::vector<Matrix> M; // vector of matrices, each matrix associated with a tetrahedron
 
 
-    std::vector<int> neighbors;
-    std::vector<int> indices;
-    int vertices_per_shape = 0;
+    /*std::vector<int> neighbors;
+    std::vector<int> indices; */
+    int vertices_per_shape = 4;
 
-    std::vector<int> partitions_vertices;
-    std::vector<int> partitions_tetrahedra;
+    std::vector<int> partitions_vertices; // Defines the boundaries of each partition in geo (i.e. defines the set of vertices in each partition)
+    std::vector<int> partitions_tetrahedra; // Defines the boundaries of each partition in tetra (i.e. defines the set of tetrahedra in each partition)
 
     
 };
