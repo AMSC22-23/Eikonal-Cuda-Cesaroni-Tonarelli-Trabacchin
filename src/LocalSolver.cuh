@@ -4,10 +4,60 @@
 
 template <typename Float>
 class LocalSolver {
+    using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
 public:
-    static void solve(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
-                      Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
-                      Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
+    static Float solve(std::array<VectorExt, 2> coordinates, VectorExt values, Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
+                      Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3
+                      ) {
+
+
+        Float lambda21;
+        Float lambda22;
+        Float lambda11;
+        Float lambda12;
+        Float lambda1;
+        Float lambda2;
+
+
+        Float alpha1 = (coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[2] - coordinates[0]);
+        Float alpha2 = (coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[2] - coordinates[0]);
+        Float alpha3 = (coordinates[3] - coordinates[2]).transpose() * velocity * (coordinates[2] - coordinates[0]);
+
+        Float beta1 = (coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[2] - coordinates[1]);
+        Float beta2 = (coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[2] - coordinates[1]);
+        double beta3 = (coordinates[3] - coordinates[2]).transpose() * velocity * (coordinates[2] - coordinates[1]);
+
+        double gamma1 = (coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[3] - coordinates[2]);
+        double gamma2 = (coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[3] - coordinates[2]);
+        double gamma3 = (coordinates[3] - coordinates[2]).transpose() * velocity * (coordinates[3] - coordinates[2]);
+
+
+        solve3D(values[2] - values[0], values[2] - values[1], alpha1, alpha2, alpha3, beta1, beta2, beta3, gamma1, gamma2, gamma3, &lambda11, &lambda21, &lambda12, &lambda22);
+        bool nan12 = isnan(lambda12);
+        bool nan11 = isnan(lambda11);
+        bool nan21 = isnan(lambda21);
+        bool nan22 = isnan(lambda22);
+        if(!nan12 && !nan11 && !nan21 && !nan22) {
+            double value1, value2;
+            VectorExt x5 = lambda11*coordinates[0] + lambda12*coordinates[1] + (1 - lambda11 - lambda12)*coordinates[2];
+
+            Float phi4 = lambda11*values[0] + lambda12*values[1] + (1 - lambda11 - lambda12)*values[2] + std::sqrt((coordinates[3] - x5).transpose() * );
+            //both couple
+        } else if(nan21 && nan22 && !nan12 && !nan11) {
+            *lambda1 = lambda11;
+            *lambda2 = lambda12;
+
+        } else if(!nan21 && !nan22 && nan12 && nan11) {
+            *lambda1 = lambda21;
+            *lambda2 = lambda22;
+        } else {
+            //2d problems
+        }
+    }
+private:
+    static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
+                        Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
+                        Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
         Float a, b, c, d, e, f, g, h, k, a_hat, b_hat, c_hat, delta;
 
         a = phi2 * (alpha1 - alpha3) - phi1 * (beta1 - beta3);
