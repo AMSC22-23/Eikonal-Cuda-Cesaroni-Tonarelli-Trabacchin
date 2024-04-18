@@ -1,4 +1,4 @@
-##ifndef EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_LOCALSOLVER_CUH
+#ifndef EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_LOCALSOLVER_CUH
 #define EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_LOCALSOLVER_CUH
 #include <cmath>
 
@@ -74,14 +74,14 @@ private:
         b_hat = 2 * b * c * d / (a * a) - f * c / a - b * g / a + h;
         c_hat = k + d * c * c / (a * a) - c * g / a;
 
-#ifdef DEBUG
-        if (b_hat * b_hat - 4 * a_hat * c_hat < 0){
-               printf("Discrimant is negative\n");
-               return 0;
+        /*if (b_hat * b_hat - 4 * a_hat * c_hat < 0){
+               printf("Discriminant is negative\n");
            }
-#endif
-
+           */
         delta = std::sqrt(b_hat * b_hat - 4 * a_hat * c_hat);
+        std::cout << "discriminant: " << delta << " a = " << a_hat << " b = "
+            << b_hat << " c = " << c_hat <<  std::endl;
+
         if(b >= 0) {
             *lambda21 = (-b_hat - delta) / (2 * a_hat);
             *lambda22 = 2 * c_hat / (-b_hat - delta);
@@ -94,7 +94,29 @@ private:
         *lambda12 = (- b * (*lambda22) - c) / a;
     }
 
+    static void solve2D(Float phi, Float alpha, Float beta, Float gamma, Float* lambda1, Float* lambda2){
+        Float a = (alpha - phi * phi) * alpha;
+        Float b = 2 * beta * (phi * phi - alpha);
+        Float c = beta * beta - phi * phi * gamma;
+
+        Float delta = std::sqrt(b * b - 4 * a * c);
+        std::cout << "discriminant: " << delta << " a = " << a << " b = "
+                  << b << " c = " << c <<  std::endl;
+
+        if(b >= 0) {
+            *lambda1 = (-b - delta) / (2 * a);
+            *lambda2 = 2 * c / (-b - delta);
+        } else {
+            *lambda1 = (-b + delta) / (2 * a);
+            *lambda2 = 2 * c / (-b + delta);
+        }
+
+    }
+
+
+
 };
 
 
 #endif //EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_LOCALSOLVER_CUH
+
