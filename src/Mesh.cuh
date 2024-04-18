@@ -36,6 +36,10 @@ public:
             }
             i += D+1;
         }
+
+        std::vector<Matrix> tempM = readMatrices(matrix_file_path);
+        execute_metis(tempM);
+
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
         for(int i = 0; i < tetra.size(); i += D+1) {
@@ -61,8 +65,6 @@ public:
             }
         }
 
-        M = readMatrices(matrix_file_path);
-        execute_metis();
         /*indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
             indices[i] = neighbors.size();
@@ -125,6 +127,24 @@ public:
         return shapes_v;
     }
 
+    template<typename V>
+    V getCoordinates(int vertex) const{
+        V coord;
+        for(int i = D * vertex; i < D * vertex + D; i++){
+            coord[i - D * vertex] = geo[i];
+        }
+        return coord;
+    }
+
+     Eigen::Matrix<double, D, 1> getCoordinates_(int vertex) const{
+         Eigen::Matrix<double, D, 1> coord;
+        for(int i = D * vertex; i < D * vertex + D; i++){
+            coord[i - D * vertex] = geo[i];
+        }
+        return coord;
+    }
+
+
     std::array<double, D> getCoordinates(int vertex) const{
         std::array<double,D> coord;
         for(int i = D * vertex; i < D * vertex + D; i++){
@@ -132,6 +152,7 @@ public:
         }
         return coord;
     }
+
 
     int getNearestVertex(std::array<double, D> coordinates) const {
         double min_distance = std::numeric_limits<double>::max();
@@ -302,6 +323,7 @@ protected:
         std::vector<double> reordered_tetra;
         reordered_tetra.resize(tetra.size());
         partitions_tetrahedra.push_back(0);
+        M.resize(6*pos.size());
         for(int i = 0; i < pos.size(); i++){
             if(i!=0 && partitions_vector[pos[i]]!= partitions_vector[pos[i-1]]){
                 partitions_tetrahedra.push_back(4*i);
@@ -309,23 +331,22 @@ protected:
             for(int j=0; j<D+1; j++){
                 reordered_tetra[4*i+j] = tetra[4*pos[i]+j];
             }
-            M.resize(6*pos.size());
-            Vector x1 = getCoordinates(tetra[4*i]);
-            Vector x2 = getCoordinates(tetra[4*i+1]);
-            Vector x3 = getCoordinates(tetra[4*i+2]);
-            Vector x4 = getCoordinates(tetra[4*i+3]);
+            Vector x1 = getCoordinates<Vector>(tetra[4*i]);
+            Vector x2 = getCoordinates<Vector>(tetra[4*i+1]);
+            Vector x3 = getCoordinates<Vector>(tetra[4*i+2]);
+            Vector x4 = getCoordinates<Vector>(tetra[4*i+3]);
             Vector e12 = x2-x1;
             Vector e13 = x3-x1;
             Vector e23 = x3-x2;
             Vector e14 = x4-x1;
             Vector e24 = x4-x2;
             Vector e34 = x4-x3;
-            M[i*6]= e12.transpose()*tempM[pos[i]]*e12;
-            M[i*6+1]= e13.transpose()*tempM[pos[i]]*e13;
-            M[i*6+2]= e23.transpose()*tempM[pos[i]]*e23;
-            M[i*6+3]= e14.transpose()*tempM[pos[i]]*e14;
-            M[i*6+4]= e24.transpose()*tempM[pos[i]]*e24;
-            M[i*6+5]= e34.transpose()*tempM[pos[i]]*e34;
+            M[i * 6]     = e12.transpose() * tempM[pos[i]] * e12;
+            M[i * 6 + 1] = e13.transpose() * tempM[pos[i]] * e13;
+            M[i * 6 + 2] = e23.transpose() * tempM[pos[i]] * e23;
+            M[i * 6 + 3] = e14.transpose() * tempM[pos[i]] * e14;
+            M[i * 6 + 4] = e24.transpose() * tempM[pos[i]] * e24;
+            M[i * 6 + 5] = e34.transpose() * tempM[pos[i]] * e34;
         }
     }
 
@@ -526,8 +547,7 @@ protected:
     std::vector<int> tetra; // Tetrahedra
     std::vector<int> ngh; // Defines the boundaries in shapes
     int partitions_number; // Number of partitions
-
-    std::vector<Matrix> M; // vector of matrices, each matrix associated with a tetrahedron
+    std::vector<double> M; // vector of matrices, each matrix associated with a tetrahedron
 
 
     /*std::vector<int> neighbors;
