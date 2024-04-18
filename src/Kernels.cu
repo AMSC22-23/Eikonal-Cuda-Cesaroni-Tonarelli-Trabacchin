@@ -95,4 +95,13 @@ int* partition_mesh_host(const std::vector<int>* neighbors, const std::vector<in
     return visitedNodes_cpu;
 
 }
+
+// ad ogni iterazione esterna, facciamo un elenco dei domini attivi (quelli che hanno bisogno di essere sweepati)
+// data questa lista, assegniamo un blocco per ogni sottodominio attivo e facciamo lo sweep, teniamo tutti i dati relativi al
+// sottodominio nella shared memory (vertici, tetraedri, matrici M, soluzioni parziali)
+// quando modifichiamo la soluzione di un vertice, dobbiamo verificare a quelle sottodominio appartiene quel vertice
+// e se quel vertice appartiene al sottodominio N (diverso da quello attuale) allora rendiamo attivo N per la prossima iterazione
+// i dati del partition vector possono essere memorizzati nella read-only cache per poter verificare il dominio di appartenenza dei vertici
+//
+
 #endif
