@@ -74,12 +74,12 @@ private:
         b_hat = 2 * b * c * d / (a * a) - f * c / a - b * g / a + h;
         c_hat = k + d * c * c / (a * a) - c * g / a;
 
-#ifdef DEBUG
+        #ifdef DEBUG
         if (b_hat * b_hat - 4 * a_hat * c_hat < 0){
                printf("Discrimant is negative\n");
                return 0;
            }
-#endif
+        #endif
 
         delta = std::sqrt(b_hat * b_hat - 4 * a_hat * c_hat);
         if(b >= 0) {
