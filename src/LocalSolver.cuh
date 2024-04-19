@@ -5,18 +5,16 @@
 template <int D, typename Float>
 class LocalSolver {
     using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
+
 public:
-    static Float solve(std::array<VectorExt, 2> coordinates, VectorExt values, Float phi1, Float phi2, Float* M
-    ) {
 
-
+    static Float solve(std::array<VectorExt, 2> coordinates, VectorExt values, Float phi1, Float phi2, Float* M) {
         Float lambda21;
         Float lambda22;
         Float lambda11;
         Float lambda12;
         Float lambda1;
         Float lambda2;
-
 
         Float alpha1 = computeScalarProduct(0,2,0,2, M);//(coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[2] - coordinates[0]);
         Float alpha2 = computeScalarProduct(1,2,0,2, M); //(coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[2] - coordinates[0]);
@@ -36,7 +34,6 @@ public:
         Float acceptable11 = isnan(lambda12) && lambda12 > 0 && lambda12 < 1;
         Float acceptable21 = isnan(lambda21) && lambda21 > 0 && lambda21 < 1;
         Float acceptable22 = isnan(lambda22) && lambda22 > 0 && lambda22 < 1;
-
 
         VectorExt x5 = lambda11*coordinates[0] + lambda12*coordinates[1] + (1 - lambda11 - lambda12)*coordinates[2];
         VectorExt e54 = coordinates[3] - x5;
@@ -78,7 +75,9 @@ public:
 
         }
     }
+
 private:
+
     static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
                         Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
                         Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
@@ -183,11 +182,9 @@ private:
         }
     }
 
-     static int getMIndex(int s1, int s2) {
+    static int getMIndex(int s1, int s2) {
         return (1<<(s2-1)) - 1 + s1;
     }
-
-
 
 };
 
