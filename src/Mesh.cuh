@@ -15,17 +15,17 @@
 #include <cassert>
 #include <cstdlib>
 #include <Eigen/Core>
-#include <stdio.h>
+#include <cstdio>
 
 
 
-template <int D>
+template <int D, typename Float>
 class Mesh {
 public:
-    using Matrix=Eigen::Matrix<double,D,D>;
+    using Matrix=Eigen::Matrix<Float,D,D>;
 
     Mesh(const std::string& mesh_file_path, int nparts, const std::string& matrix_file_path) : partitions_number(nparts){
-        std::set<std::set<int>> sets = Mesh<D>::init_mesh(mesh_file_path, 4);
+        std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
         tetra.resize(sets.size() * (D+1));
         int i = 0;
         for(auto &t : sets) {
@@ -136,8 +136,8 @@ public:
         return coord;
     }
 
-     Eigen::Matrix<double, D, 1> getCoordinates_(int vertex) const{
-         Eigen::Matrix<double, D, 1> coord;
+     Eigen::Matrix<Float, D, 1> getCoordinates_(int vertex) const{
+         Eigen::Matrix<Float, D, 1> coord;
         for(int i = D * vertex; i < D * vertex + D; i++){
             coord[i - D * vertex] = geo[i];
         }
@@ -145,8 +145,8 @@ public:
     }
 
 
-    std::array<double, D> getCoordinates(int vertex) const{
-        std::array<double,D> coord;
+    std::array<Float, D> getCoordinates(int vertex) const{
+        std::array<Float,D> coord;
         for(int i = D * vertex; i < D * vertex + D; i++){
             coord[i - D * vertex] = geo[i];
         }
@@ -154,11 +154,11 @@ public:
     }
 
 
-    int getNearestVertex(std::array<double, D> coordinates) const {
-        double min_distance = std::numeric_limits<double>::max();
+    int getNearestVertex(std::array<Float, D> coordinates) const {
+        Float min_distance = std::numeric_limits<Float>::max();
         int min_vertex = 0;
         for(int i = 0; i < getNumberVertices(); i++){
-            double distance = getDistance(coordinates, getCoordinates(i));
+            Float distance = getDistance(coordinates, getCoordinates(i));
             if(distance < min_distance){
                 min_distance = distance;
                 min_vertex = i;
@@ -226,7 +226,7 @@ public:
         output_file << "ASCII\n" << "DATASET UNSTRUCTURED_GRID\n\n";
 
         // points
-        output_file << "POINTS " << getNumberVertices() << " double\n";
+        output_file << "POINTS " << getNumberVertices() << " Float\n";
         for(int i = 0; i < getNumberVertices(); i++){
             for(int j = 0; j < D; j++){
                 output_file << std::setprecision(15) << geo[j + i * D] << " ";
@@ -272,7 +272,7 @@ public:
         // look_up table
         output_file << std::endl;
         output_file << "POINT_DATA " << getNumberVertices() << std::endl;
-        output_file << "SCALARS solution double 1" << std::endl;
+        output_file << "SCALARS solution Float 1" << std::endl;
         output_file << "LOOKUP_TABLE default" << std::endl;
         for(int i = 0; i < getNumberVertices(); i++){
             output_file << solutions[i] << " ";
@@ -287,7 +287,7 @@ public:
         return tetra;
     }
 
-    const std::vector<double>& get_M() const{
+    const std::vector<Float>& get_M() const{
         return M;
     }
 
@@ -303,8 +303,8 @@ public:
 protected:
 
 
-    double getDistance(std::array<double, D> c1, std::array<double, D> c2) const {
-        double res = 0;
+    Float getDistance(std::array<Float, D> c1, std::array<Float, D> c2) const {
+        Float res = 0;
         for(int i = 0; i < D; i++){
             res += (c1[i] - c2[i]) * (c1[i] - c2[i]);
         }
@@ -314,13 +314,13 @@ protected:
 
     void reorderTetra(std::vector<int> partitions_vector, std::vector<Matrix> tempM){
 
-        using Vector=Eigen::Matrix<double,D,1>;
+        using Vector=Eigen::Matrix<Float,D,1>;
         partitions_tetrahedra.resize(partitions_number);
         std::vector<int> pos;
         pos.resize(partitions_vector.size());
         std::iota(pos.begin(), pos.end(),0);
         std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return partitions_vector[i] < partitions_vector[j];});
-        std::vector<double> reordered_tetra;
+        std::vector<Float> reordered_tetra;
         reordered_tetra.resize(tetra.size());
         partitions_tetrahedra.push_back(0);
         M.resize(6*pos.size());
@@ -360,7 +360,7 @@ protected:
         size_t current_index = 0;
         size_t prec;
         std::vector<int> same;
-        std::vector<double> reordered_geo;
+        std::vector<Float> reordered_geo;
         reordered_geo.resize(0);
         map_vertices.resize(geo.size() / D);
         //std::vector<int> reordered_shapes(shapes.size());
@@ -428,7 +428,7 @@ protected:
         size_t current_index = 0;
         size_t prec;
         std::vector<int> same;
-        std::vector<double> reduced_geo;
+        std::vector<Float> reduced_geo;
         reduced_geo.resize(0);
         map_vertices.resize(geo.size() / D);
 
@@ -473,7 +473,7 @@ protected:
         if(matrix_file.is_open()){
             matrices.resize(tetra.size()/4);
             std::string buffer;
-            std::array<double,6> n;
+            std::array<Float,6> n;
             for(int i = 0; i <tetra.size()/4; i++){
                 matrix_file>>buffer;
                 sscanf(buffer.c_str(),"%f %f %f %f %f %f", &n[0], &n[1], &n[2], &n[3], &n[4], &n[5]);
@@ -542,12 +542,12 @@ protected:
     }
 
 
-    std::vector<double> geo; // Coordinates of the vertices
+    std::vector<Float> geo; // Coordinates of the vertices
     std::vector<int> shapes; // For each vertex, the shapes associated to it (contains only the other three vertices in the shape)
     std::vector<int> tetra; // Tetrahedra
     std::vector<int> ngh; // Defines the boundaries in shapes
     int partitions_number; // Number of partitions
-    std::vector<double> M; // vector of matrices, each matrix associated with a tetrahedron
+    std::vector<Float> M; // vector of matrices, each matrix associated with a tetrahedron
 
 
     /*std::vector<int> neighbors;
