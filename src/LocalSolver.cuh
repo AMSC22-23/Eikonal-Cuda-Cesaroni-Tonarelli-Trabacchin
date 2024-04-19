@@ -32,10 +32,10 @@ public:
 
 
         solve3D(values[2] - values[0], values[2] - values[1], alpha1, alpha2, alpha3, beta1, beta2, beta3, gamma1, gamma2, gamma3, &lambda11, &lambda21, &lambda12, &lambda22);
-        Float nan12 = isnan(lambda12);
-        Float nan11 = isnan(lambda11);
-        Float nan21 = isnan(lambda21);
-        Float nan22 = isnan(lambda22);
+        Float acceptable12 = isnan(lambda11) && lambda11 > 0 && lambda11 < 1;
+        Float acceptable11 = isnan(lambda12) && lambda12 > 0 && lambda12 < 1;
+        Float acceptable21 = isnan(lambda21) && lambda21 > 0 && lambda21 < 1;
+        Float acceptable22 = isnan(lambda22) && lambda22 > 0 && lambda22 < 1;
 
 
         VectorExt x5 = lambda11*coordinates[0] + lambda12*coordinates[1] + (1 - lambda11 - lambda12)*coordinates[2];
@@ -52,8 +52,7 @@ public:
         }
         P = sqrt(P);
 
-
-        if(!nan12 && !nan11 && !nan21 && !nan22) {
+        if(acceptable12 && acceptable11 && acceptable21 && acceptable22) {
             Float value1, value2;
 
             Float phi4_1 = lambda11*values[0] + lambda12*values[1] + (1 - lambda11 - lambda12)*values[2] + P;
@@ -63,22 +62,20 @@ public:
             } else {
                 return phi4_2;
             }
-
-            //both couple
-        } else if(nan21 && nan22 && !nan12 && !nan11) {
+        } else if(!acceptable21 && !acceptable22 && acceptable12 && acceptable11) {
             *lambda1 = lambda11;
             *lambda2 = lambda12;
             Float phi4 = lambda1*values[0] + lambda2*values[1] + (1 - lambda1 - lambda2)*values[2] + P;
             return phi4;
 
-        } else if(!nan21 && !nan22 && nan12 && nan11) {
+        } else if(acceptable21 && acceptable22 && !acceptable12 && !acceptable11) {
             *lambda1 = lambda21;
             *lambda2 = lambda22;
             Float phi4 = lambda1*values[0] + lambda2*values[1] + (1 - lambda1 - lambda2)*values[2] + P;
             return phi4;
 
         } else {
-            //2d problems
+
         }
     }
 private:
@@ -106,9 +103,9 @@ private:
            }
            */
         delta = std::sqrt(b_hat * b_hat - 4 * a_hat * c_hat);
-        std::cout << "discriminant: " << delta << " a = " << a_hat << " b = "
+       /* std::cout << "discriminant: " << delta << " a = " << a_hat << " b = "
                   << b_hat << " c = " << c_hat <<  std::endl;
-
+        */
         if(b >= 0) {
             *lambda21 = (-b_hat - delta) / (2 * a_hat);
             *lambda22 = 2 * c_hat / (-b_hat - delta);
@@ -127,9 +124,9 @@ private:
         Float c = beta * beta - phi * phi * gamma;
 
         Float delta = std::sqrt(b * b - 4 * a * c);
-        std::cout << "discriminant: " << delta << " a = " << a << " b = "
+        /*std::cout << "discriminant: " << delta << " a = " << a << " b = "
                   << b << " c = " << c <<  std::endl;
-
+        */
         if(b >= 0) {
             *lambda1 = (-b - delta) / (2 * a);
             *lambda2 = 2 * c / (-b - delta);
@@ -148,6 +145,8 @@ private:
             auto [s1, s2] = getOriginalNumbers(s_gray);
             int sign = (2 * (s_gray > k_gray) - 1) * (2 * (s_gray > l_gray) - 1);
             return sign * 0.5 * (M[getMIndex(k1, k2) + M[getMIndex(l1, l2) - M[getMIndex(s1, s2)]]]);
+        } else {
+            return ( (k1 < k2) ? M[getMIndex(k1,k2)] : M[getMIndex(k2,k1)]);
         }
     }
 
