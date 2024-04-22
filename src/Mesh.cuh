@@ -17,6 +17,10 @@
 #include <Eigen/Core>
 #include <cstdio>
 
+struct TetraConfig {
+    int tetra_index;
+    int tetra_config;
+};
 
 
 template <int D, typename Float>
@@ -58,12 +62,28 @@ public:
         cont += g[ngh.size()-1].size();
         shapes.resize(cont);
         cont = 0;
+
+        for(i = 0; i < g.size(); i++) {
+            for(int j = 0; j < g[i].size(); j++) {
+                shapes[cont].tetra_index = g[i][j];
+                int tetra_to_search = g[i][j];
+                for(int k = 0; k < 4; k++) {
+                    if(tetra[4*tetra_to_search + k] == i) {
+                        shapes[cont].tetra_config = k;
+                    }
+                }
+                cont++;
+            }
+        }
+
+        /*
         for(auto &x : g) {
             for(auto &y : x) {
                 shapes[cont] = y;
                 cont++;
             }
         }
+         */
 
         /*indices.resize(getNumberVertices());
         for(int i = 0; i < getNumberVertices(); i++){
@@ -90,7 +110,7 @@ public:
         while(true) {
             res+= "vertex " + std::to_string(cont) + ": " ;
             for(size_t i = index; i < (cont < ngh.size()-1 ? ngh[cont+1] : shapes.size()); i += vertices_per_shape - 1){
-                res += std::to_string(shapes[i]) + " " + std::to_string(shapes[i+1]) + ", ";
+                res += std::to_string(shapes[i].tetra_index) + " " + std::to_string(shapes[i+1].tetra_index) + ", ";
                 index = i + vertices_per_shape - 1;
             }
             cont++;
@@ -113,7 +133,7 @@ public:
     std::vector<int> getNeighbors(size_t vertex) const {
         std::set<int> n;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
-            n.insert(shapes[i]);
+            n.insert(shapes[i].tetra_index);
         }
         std::vector<int> res(n.begin(), n.end());
         return res;
@@ -137,7 +157,7 @@ public:
     }
 
      Eigen::Matrix<Float, D, 1> getCoordinates_(int vertex) const{
-         Eigen::Matrix<Float, D, 1> coord;
+        Eigen::Matrix<Float, D, 1> coord;
         for(int i = D * vertex; i < D * vertex + D; i++){
             coord[i - D * vertex] = geo[i];
         }
@@ -543,7 +563,7 @@ protected:
 
 
     std::vector<Float> geo; // Coordinates of the vertices
-    std::vector<int> shapes; // For each vertex, the shapes associated to it (contains only the other three vertices in the shape)
+    std::vector<TetraConfig> shapes; // For each vertex, the shapes associated to it (contains only the other three vertices in the shape)
     std::vector<int> tetra; // Tetrahedra
     std::vector<int> ngh; // Defines the boundaries in shapes
     int partitions_number; // Number of partitions
