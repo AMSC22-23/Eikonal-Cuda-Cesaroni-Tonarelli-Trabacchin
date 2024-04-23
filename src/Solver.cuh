@@ -33,29 +33,54 @@ public:
         cudaMemcpy(M_dev, mesh->get_M().data(), sizeof(Float) * mesh->get_M().size(), cudaMemcpyHostToDevice);
     }
 
-    void solve(std::vector<int> source_nodes, Float infinity_value){
+    void solve(std::vector<int> source_nodes, Float infinity_value, const std::string& output_file_name){
         std::vector<cudaStream_t*> streams;
         int* active_domains;
+        bool check = false;
+
+        // allocate host memory
+        active_domains = (int*)malloc(sizeof(int) * mesh->getPartitionsNumber());
+
+        // prepare the data
         setSolutionsAndActiveDomains(source_nodes, infinity_value);
+        // create streams, one for each domain
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
             cudaStreamCreate(streams[i]);
         }
-        active_domains = (int*)malloc(sizeof(int) * mesh->getPartitionsNumber());
-        while(true){
+
+        // loop used to perform domain sweeps
+        while(!check){
             cudaMemcpy(active_domains, active_domains_dev, sizeof(int) * mesh->getPartitionsNumber(), cudaMempcyDeviceToHost);
+            check = false;
+            // check if all domains are not active; in that case, the computation is done and there is no need to do other domain sweeps
+            for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
+                if(active_domains[i] == 1) check = true;
+            }
             cudaMemcset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
-            for(int i = 0; i < mesh->getPartitionsNumber(); i++){
+            // perform sweep over active domains
+            for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1){
-                    // chiamata al kernel che fa lo sweep
+                    // TODO compute right number of blocks and threads per block
+                    domainSweep<<<1024, 2, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
+                                      shapes_dev, ngh, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
+                                      mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value);
                 }
             }
             cudaDeviceSynchronize();
         }
 
-        // alla fine copia le solutions form gpu to cpu, poi nel file vtk
-        std::vector<Float> solutions;
+        // copy solutions from device to host and print them into a vtk file to allow visualization
+        Float* solutions;
         cudaMemcpy(solutions, solutions_dev.data(), sizeof(Float) * mesh->getNumberVertices().size(), cudaMemcpyDeviceToHost);
+        mesh.getSolutionsVTK(output_file_name, solutions);
 
+        // destroy streams
+        for(int i = 0; i < mesh->getPartitionsNumber(); i++){
+            cudaStreamDestroy(streams[i]);
+        }
+        // free host memory
+        delete active_domains;
+        delete solutions;
     }
 
 
