@@ -52,7 +52,7 @@ int main() {
     Eikonal::SimplexData<D, N> simplex{coordinates, velocity};
     //Eikonal::solveEikonalLocalProblem<N, D> localSolver{simplex,values};
     //auto sol_prof = localSolver();
-    auto [sol_our, lambda1, lambda2] = LocalSolver<D, double>::solve(coordinates, values, M, velocity, 2);
+    auto [sol_our, lambda1, lambda2] = LocalSolver<D, double>::solve(coordinates, values, M, 2);
 
     //std::cout << "sol prof = " << sol_prof.value << std::endl;
     //std::cout << "lambda prof = " << sol_prof.lambda << std::endl;

@@ -4,104 +4,75 @@
 #include <cuda.h>
 #include <random>
 #include <set>
+#include "../localProblem_alt2/include/Phi.hpp"
+#include "../localProblem_alt2/include/solveEikonalLocalProblem.hpp"
+#include "Mesh.cuh"
+#include "LocalSolver.cuh"
 
-__global__ void partition_mesh_kernel(int* visitedNodes, int dim_d, int* neighbors, int dim_ne, int* indices, int* frontier,
-                                      int dim_f, int* new_frontier, int* dim_nf){
-    if(blockIdx.x == 0 && threadIdx.x == 0) {
-        printf("neighbors size gpu : %d\n", dim_ne);
+constexpr int D = 3;
+using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
+using Matrix = typename Eikonal::Eikonal_traits<D,2>::AnisotropyM;
+using VectorV = typename Eigen::Matrix<double,4,1>;
+
+
+template <typename Float>
+__global__ void setSolutionsToInfinity(Float* solutions_dev, Float infinity_value, size_t size_sol){
+    int threadId = threadIdx.x + blockIdx.x * blockDim.x;
+    if(threadId < size_sol){
+        solutions_dev[threadId] = infinity_value;
     }
-    if (threadIdx.x + blockDim.x * blockIdx.x < dim_f) {
-        int vertex = frontier[threadIdx.x + blockDim.x * blockIdx.x];
-        int end = (vertex == dim_d - 1) ? dim_ne : indices[vertex + 1];
-        for (int i = indices[vertex]; i < end; i++) {
-            if(i>=dim_ne) {
-                printf("error1 i=%d vertex=%d\n",i,vertex);
-            }
-            int v = neighbors[i];
-            if(v>=dim_d) {
-                printf("error2\n");
-            }
-            int old = atomicCAS(&visitedNodes[v], 0, visitedNodes[vertex]);
-            if (old == 0) {
-                int index = atomicAdd(dim_nf, 1);
-                new_frontier[index] = v;
-            }
+}
+
+template <typename Float>
+__global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_nodes_dev, int* active_domains_dev, int* partitions_vertices_dev, int partitions_number, size_t size_sources){
+    int threadId = threadIdx.x + blockIdx.x * blockDim.x;
+    if(threadId < size_sources) {
+        solutions_dev[source_nodes_dev[threadId]] = 0;
+
+        for(int i = 0; i < partitions_number; i++){
+            if(source_nodes_dev[threadId] < partitions_vertices_dev[i])
+                active_domains_dev[i] = 1; //there is no need to use atomic operations since if multiple threads try to access the memory location they all write 1
         }
     }
 }
 
-int* partition_mesh_host(const std::vector<int>* neighbors, const std::vector<int>* indices, int n_sub){
-    int *visitedNodes_cpu, *visitedNodes_gpu, *frontier_cpu, *frontier_gpu,
-                 *new_frontier_gpu, *neighbors_gpu, *indices_gpu;
-    int dim_d, dim_ne, dim_f, *dim_nf;
-    dim_d = indices->size();
-    dim_ne = neighbors->size();
-    std::cout << "neighbors size cpu: " << dim_ne << std::endl;
-    dim_f = n_sub;
-    std::random_device dev;
-    std::mt19937 rng(dev());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(0,dim_d - 1);
-    std::vector<std::set<int>> v(n_sub);
-    frontier_cpu = (int*)malloc(n_sub*sizeof(int));
-    visitedNodes_cpu = (int*)malloc(dim_d*sizeof(int));
-    for(int i = 0; i < n_sub; i++) {
-        frontier_cpu[i] = (int)dist(rng);
+template <typename Float>
+__global__ void domainSweep(int domain_id, int* partitions_vertices_dev, int* partitions_tetra_dev, Float* geo_dev, int* tetra_dev,
+                            TetraConfig* shapes_dev, int* ngh, Float* M_dev, Float* solutions_dev, int* active_domains_dev,
+                            int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value){
+    int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
+    int nodeIdGlobal = partitions_vertices_dev[domain_id] + nodeIdDomain;
+    std::array<VectorExt, 4> coordinates;
+    VectorV values;
+    Float* M;
+    Float minimum_sol = infinity_value;
+    Float lambda1, lambda2;
+    // each thread takes a node and compute the solution looping over all its associated tetrahedra
+    if (nodeIdGlobal < num_vertices){
+        for(int i = ngh[nodeIdGlobal]; i < (nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size; i++){
+            // call local solver on tetra[shapes_dev[i].tetra_index] using configuration shapes_dev[i].tetra_config
+            for(int j = 0; j < D + 1; j++){
+                for(int k = 0; k < D; k++) {
+                    coordinates[j][k] = geo_dev[tetra_dev[shapes_dev[i].tetra_index + j] + k];
+                }
+                values[j] = solutions_dev[tetra_dev[shapes_dev[i].tetra_index + j]];
+            }
+            M = M_dev + shapes_dev[i].tetra_index * 6;
+            auto [sol, lambda1, lambda2] = LocalSolver<D, Float>::solve(coordinates, values, M, D + 1 - shapes_dev[i].tetra_config);
+            if(sol < minimum_sol)
+                minimum_sol = sol;
+        }
+        // TODO modifiy solutions_dev[nodeIdGlobal] to minimum_sol using an atomic
+        // TODO modify active domain
     }
-    for(int i = 0; i < dim_d; i++){
-        visitedNodes_cpu[i] = 0;
-    }
-
-    for(int i = 0; i < n_sub; i++) {
-        visitedNodes_cpu[frontier_cpu[i]] = i + 1;
-    }
-
-    //allocate and initialize visitedNodes
-    cudaMalloc(&visitedNodes_gpu, indices->size() * sizeof(int));
-    cudaMemcpy(visitedNodes_gpu, visitedNodes_cpu, dim_d * sizeof(int), cudaMemcpyHostToDevice);
-    //allocate frontier
-    cudaMalloc(&frontier_gpu, dim_d * sizeof(int));
-    //allocate and initialize indices
-    cudaMalloc(&indices_gpu, dim_d * sizeof(int));
-    cudaMemcpy(indices_gpu, indices->data(), dim_d * sizeof(int), cudaMemcpyHostToDevice);
-    //allocate and initialize neighbors
-    cudaMalloc(&neighbors_gpu, dim_ne * sizeof(int));
-    cudaMemcpy(neighbors_gpu, neighbors->data(), dim_ne * sizeof(int), cudaMemcpyHostToDevice);
-    //allocate and initialize new_frontier (which will be assigned to frontier in the while loop)
-    cudaMalloc(&new_frontier_gpu, dim_d * sizeof(int));
-    //allocate and initialize dim_new_frontier (which will be assigned to dim_frontier in the while loop)
-    cudaMalloc(&dim_nf, sizeof(int));
-    cudaMemset(dim_nf, 0, sizeof(int));
-    cudaMemcpy(frontier_gpu, frontier_cpu, dim_d * sizeof(int), cudaMemcpyHostToDevice);
-    while(dim_f != 0){
-        //copy new_frontier into frontier
-
-        //copy dim_nf into dim_f
-        //cudaMemcpy(&dim_f, dim_nf, sizeof(int), cudaMemcpyDeviceToHost);
-        //set dim_nf to zero
-        partition_mesh_kernel<<<5,4>>>(visitedNodes_gpu, dim_d, neighbors_gpu, dim_ne, indices_gpu, frontier_gpu,
-                dim_f, new_frontier_gpu, dim_nf);
-        cudaMemcpy(&dim_f, dim_nf, sizeof(int), cudaMemcpyDeviceToHost);
-        cudaMemcpy(frontier_gpu, new_frontier_gpu, dim_d * sizeof(int), cudaMemcpyDeviceToDevice);
-        cudaMemset(dim_nf, 0, sizeof(int));
-
-    }
-    cudaMemcpy(visitedNodes_cpu, visitedNodes_gpu, dim_d*sizeof(int), cudaMemcpyDeviceToHost);
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        std::cout << err << std::endl;
-        std::cout << "execution failed" << std::endl;
-        exit(1);
-    }
-    return visitedNodes_cpu;
-
 }
 
 // ad ogni iterazione esterna, facciamo un elenco dei domini attivi (quelli che hanno bisogno di essere sweepati)
-// data questa lista, assegniamo un blocco per ogni sottodominio attivo e facciamo lo sweep, teniamo tutti i dati relativi al
-// sottodominio nella shared memory (vertici, tetraedri, matrici M, soluzioni parziali)
+// data questa lista, assegniamo un blocco per ogni sottodominio attivo e facciamo lo sweep, teniamo
+// tutti i dati relativi al sottodominio nella shared memory (vertici, tetraedri, matrici M, soluzioni parziali)
 // quando modifichiamo la soluzione di un vertice, dobbiamo verificare a quelle sottodominio appartiene quel vertice
-// e se quel vertice appartiene al sottodominio N (diverso da quello attuale) allora rendiamo attivo N per la prossima iterazione
-// i dati del partition vector possono essere memorizzati nella read-only cache per poter verificare il dominio di appartenenza dei vertici
-//
+// e se quel vertice appartiene al sottodominio N (diverso da quello attuale) allora rendiamo attivo N per
+// la prossima iterazione. i dati del partition vector possono essere memorizzati nella read-only cache
+// per poter verificare il dominio di appartenenza dei vertici
 
 #endif
