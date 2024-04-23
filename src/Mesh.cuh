@@ -68,8 +68,8 @@ public:
                 shapes[cont].tetra_index = g[i][j];
                 int tetra_to_search = g[i][j];
                 for(int k = 0; k < 4; k++) {
-                    if(tetra[4*tetra_to_search + k] == i) {
-                        shapes[cont].tetra_config = k;
+                    if(tetra[4 * tetra_to_search + k] == i) {
+                        shapes[cont].tetra_config = k + 1;
                     }
                 }
                 cont++;
@@ -165,7 +165,7 @@ public:
     }
 
 
-    std::array<Float, D> getCoordinates(int vertex) const{
+    std::array<Float, D> getCoordinates(int vertex) const {
         std::array<Float,D> coord;
         for(int i = D * vertex; i < D * vertex + D; i++){
             coord[i - D * vertex] = geo[i];
@@ -173,6 +173,25 @@ public:
         return coord;
     }
 
+    int getPartitionsNumber() const {
+        return partitions_number;
+    }
+
+    std::vector<int>& getPartitionVertices() {
+        return partitions_vertices;
+    }
+
+    std::vector<int>& getPartitionTetra() {
+        return partitions_tetrahedra;
+    }
+
+    std::vector<Float>& getGeo() {
+        return geo;
+    }
+
+    std::vector<TetraConfig>& getShapes() {
+        return shapes;
+    }
 
     int getNearestVertex(std::array<Float, D> coordinates) const {
         Float min_distance = std::numeric_limits<Float>::max();
