@@ -8,10 +8,11 @@ template <int D, typename Float>
 class LocalSolver {
     using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
     using Matrix = typename Eikonal::Eikonal_traits<D,2>::AnisotropyM;
+    using VectorV = typename Eigen::Matrix<double,4,1>;
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-    static auto solve(std::array<VectorExt, 4> coordinates, VectorExt values, Float* M, Matrix velocity) {
+    static auto solve(std::array<VectorExt, 4> coordinates, VectorV values, Float* M, Matrix velocity, int shift) {
 
 
         Float lambda21;
@@ -22,29 +23,38 @@ public:
         Float lambda2;
 
 
-        Float alpha1 = computeScalarProduct(0,2,0,2, M);
+        Float alpha1 = computeScalarProduct(0,2,0,2, M, shift);
         //(coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[2] - coordinates[0]);
-        Float alpha2 = computeScalarProduct(1,2,0,2, M);
+        Float alpha2 = computeScalarProduct(1,2,0,2, M, shift);
         //(coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[2] - coordinates[0]);
-        Float alpha3 = computeScalarProduct(2,3,0,2, M);
+        Float alpha3 = computeScalarProduct(2,3,0,2, M, shift);
         //(coordinates[3] - coordinates[2]).transpose() * velocity * (coordinates[2] - coordinates[0]);
 
         Float beta1 = alpha2;//(coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[2] - coordinates[1]);
-        Float beta2 = computeScalarProduct(1,2,1,2,M);
+        Float beta2 = computeScalarProduct(1,2,1,2,M, shift);
         //(coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[2] - coordinates[1]);
-        Float beta3 = computeScalarProduct(2,3,1,2,M);
+        Float beta3 = computeScalarProduct(2,3,1,2,M, shift);
         //(coordinates[3] - coordinates[2]).transpose() * velocity * (coordinates[2] - coordinates[1]);
 
         Float gamma1 = alpha3;
         //(coordinates[2] - coordinates[0]).transpose() * velocity * (coordinates[3] - coordinates[2]);
         Float gamma2 = beta3;//(coordinates[2] - coordinates[1]).transpose() * velocity * (coordinates[3] - coordinates[2]);
-        Float gamma3 = computeScalarProduct(2,3,2,3,M);
+        Float gamma3 = computeScalarProduct(2,3,2,3,M, shift);
         //(coordinates[3] - coordinates[2]).transpose() * velocity * (coordinates[3] - coordinates[2]);
 
+        int phi31_gray_code = getGrayCode(0, 2);
+        int phi32_gray_code = getGrayCode(1, 2);
+        auto [phi31_gray_code_rotated, phi31_gray_code_rotated_sign] = rotate(phi31_gray_code, shift);
+        auto [phi32_gray_code_rotated, phi32_gray_code_rotated_sign] = rotate(phi32_gray_code, shift);
+        auto [phi31_actual_index1, phi31_actual_index2] = getOriginalNumbers(phi31_gray_code_rotated);
+        auto [phi32_actual_index1, phi32_actual_index2] = getOriginalNumbers(phi32_gray_code_rotated);
 
-        solve3D(values[2] - values[0], values[2] - values[1], alpha1, alpha2, alpha3, beta1, beta2, beta3, gamma1, gamma2, gamma3, &lambda11, &lambda21, &lambda12, &lambda22);
-        std::cout << "phi1 = " << values[2] - values[0] << std::endl;
-        std::cout << "phi2 = " << values[2] - values[1] << std::endl;
+        //std::cout << phi32_actual_index2 << " " << phi32_actual_index1 << " " << phi32_gray_code_rotated_sign << std::endl;
+
+
+        solve3D(phi31_gray_code_rotated_sign*(values[phi31_actual_index2] - values[phi31_actual_index1]), phi32_gray_code_rotated_sign*(values[phi32_actual_index2] - values[phi32_actual_index1]), alpha1, alpha2, alpha3, beta1, beta2, beta3, gamma1, gamma2, gamma3, &lambda11, &lambda21, &lambda12, &lambda22);
+        std::cout << "phi1 = " << phi31_gray_code_rotated_sign*(values[phi31_actual_index2] - values[phi31_actual_index1]) << std::endl;
+        std::cout << "phi2 = " << phi32_gray_code_rotated_sign*(values[phi32_actual_index2] - values[phi32_actual_index1]) << std::endl;
         std::cout << "alpha1 = " << alpha1 << std::endl;
         std::cout << "alpha2 = " << alpha2 << std::endl;
         std::cout << "alpha3 = " << alpha3 << std::endl;
@@ -62,123 +72,46 @@ public:
 
 
 
-        Float acceptable12 = !std::isnan(lambda11) && lambda11 > 0 && lambda11 < 1;
-        Float acceptable11 = !std::isnan(lambda12) && lambda12 > 0 && lambda12 < 1;
-        Float acceptable21 = !std::isnan(lambda21) && lambda21 > 0 && lambda21 < 1;
-        Float acceptable22 = !std::isnan(lambda22) && lambda22 > 0 && lambda22 < 1;
+        bool acceptable11 = !std::isnan(lambda11) && lambda11 > 0 && lambda11 < 1;
+        bool acceptable12 = !std::isnan(lambda12) && lambda12 > 0 && lambda12 < 1;
+        bool acceptable21 = !std::isnan(lambda21) && lambda21 > 0 && lambda21 < 1;
+        bool acceptable22 = !std::isnan(lambda22) && lambda22 > 0 && lambda22 < 1;
 
-//xy (lambda11, lambda21), (lambda12, lambda22)
+
+        //xy (lambda11, lambda21), (lambda12, lambda22)
         if(acceptable21 && acceptable11 && acceptable12 && acceptable22) {
-            Float phi4_1 = computeSolution3D(lambda11, lambda21, values, coordinates, M, velocity);
-            Float phi4_2 = computeSolution3D(lambda12, lambda22, values, coordinates, M, velocity);
+            Float phi4_1 = computeSolution3D(lambda11, lambda21, values, coordinates, M, velocity, shift);
+            Float phi4_2 = computeSolution3D(lambda12, lambda22, values, coordinates, M, velocity, shift);
+            std::cout << "phi4_1 = " << phi4_1 << std::endl;
+            std::cout << "phi4_2 = " << phi4_2 << std::endl;
             if(phi4_1 < phi4_2) {
                 return std::make_tuple(phi4_1, lambda11, lambda21);
             } else {
                 return std::make_tuple(phi4_2, lambda12, lambda22);
             }
-        } else if(!acceptable12 && !acceptable22 && acceptable21 && acceptable11) {
+        } else if((!acceptable12 || !acceptable22) && acceptable21 && acceptable11) {
             lambda1 = lambda11;
             lambda2 = lambda21;
-            Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M, velocity);
+            Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M, velocity, shift);
+            std::cout << "phi4_1 = " << phi4 << std::endl;
             return std::make_tuple(phi4, lambda1, lambda2);
 
-        } else if(acceptable12 && acceptable22 && !acceptable12 && !acceptable11) {
+        } else if(acceptable12 && acceptable22 && (!acceptable21 || !acceptable11)) {
             lambda1 = lambda21;
             lambda2 = lambda22;
-            Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M, velocity);
+            Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M, velocity, shift);
+            std::cout << "phi4_2 = " << phi4 << std::endl;
             return std::make_tuple(phi4, lambda1, lambda2);
 
         } else {
-            /*
-            Float alpha, beta, gamma, phi;
-            Float phi4[6];
-            std::array<Float, 2> lambdas[6];
-            bool acceptable[6] = {false};
-            //face 1,3
-            alpha = computeScalarProduct(0, 2, 0, 2, M);
-            beta  = computeScalarProduct(0, 3, 0, 2, M);
-            gamma = computeScalarProduct(0, 3, 0, 3, M);
-            phi = values[2] - values[0];
-            solve2D(phi, alpha, beta, gamma, &lambda1, &lambda2);
-
-            if(!std::isnan(lambda1)) {
-                if(lambda1 >= 0 && lambda1 <= 1) {
-                    phi4[0] = computeSolution2D(lambda1, values, coordinates, M, 0, 2, velocity);
-                    lambdas[0] = {lambda1,0};
-                    acceptable[0] = true;
-                }
-                if(lambda2 >= 0 && lambda2 <= 1) {
-                    phi4[1] = computeSolution2D(lambda2, values, coordinates, M, 0, 2, velocity);
-                    lambdas[1] = {0, lambda2};
-                    acceptable[1] = true;
-                }
-            }
-
-            //face 1,2
-            alpha = computeScalarProduct(0, 1, 0, 1, M);
-            beta  = computeScalarProduct(0, 3, 0, 1, M);
-            gamma = computeScalarProduct(0, 3, 0, 3, M);
-            phi = values[1] - values[0];
-            solve2D(phi, alpha, beta, gamma, &lambda1, &lambda2);
-            if(!std::isnan(lambda1)) {
-                if(lambda1 >= 0 && lambda1 <= 1) {
-                    phi4[2] = computeSolution2D(lambda1, values, coordinates, M, 0, 1, velocity);
-                    lambdas[2] = {lambda1,0};
-                    acceptable[2] = true;
-                }
-                if(lambda2 >= 0 && lambda2 <= 1) {
-                    phi4[3] = computeSolution2D(lambda2, values, coordinates, M, 0, 1, velocity);
-                    lambdas[3] = {0,lambda2};
-                    acceptable[3] = true;
-                }
-            }
-
-            //face 2,3
-            alpha = computeScalarProduct(1, 2, 1, 2, M);
-            beta  = computeScalarProduct(1, 3, 1, 2, M);
-            gamma = computeScalarProduct(1, 3, 1, 3, M);
-            phi = values[2] - values[1];
-            solve2D(phi, alpha, beta, gamma, &lambda1, &lambda2);
-            if(!std::isnan(lambda1)) {
-                if(lambda1 >= 0 && lambda1 <= 1) {
-                    phi4[4] = computeSolution2D(lambda1, values, coordinates, M, 1, 2, velocity);
-                    lambdas[4] = {lambda1,0};
-                    acceptable[4] = true;
-                }
-                if(lambda2 >= 0 && lambda2 <= 1) {
-                    lambdas[5] = {0,lambda2};
-                    phi4[5] = computeSolution2D(lambda2, values, coordinates, M, 1, 2, velocity);
-                    acceptable[5] = true;
-                }
-            }
-
-            //find smallest acceptable solution
-            Float minimum_value = std::numeric_limits<Float>::max();
-            int minimum_index;
-            bool minimum_found = false;
-            for(int i = 0; i < 6; i++) {
-                if(acceptable[i] && phi4[i] < minimum_value) {
-                    minimum_value = phi4[i];
-                    minimum_index = i;
-                    minimum_found = true;
-                }
-            }
-
-            if(minimum_found) {
-                return std::make_tuple(minimum_value, lambdas[minimum_index][0], lambdas[minimum_index][1]);
-            }
-             */
-            //if 3d solutions are not acceptable we resort to these solutions
-            //TODO check whether this approach leads to convergence, as this is an arbitrary assumption
-            Float last_resort1 = computeSolution3D(1, 0, values, coordinates, M, velocity);
-            Float last_resort2 = computeSolution3D(0, 1, values, coordinates, M, velocity);
+            Float last_resort1 = computeSolution3D(1, 0, values, coordinates, M, velocity, shift);
+            Float last_resort2 = computeSolution3D(0, 1, values, coordinates, M, velocity, shift);
             std::cout << "last resort" << std::endl;
             if(last_resort1 < last_resort2) {
                 return std::make_tuple(last_resort1, 1.0, 0.0);
             } else {
                 return std::make_tuple(last_resort2, 0.0, 1.0);
             }
-            // return (last_resort1 < last_resort2) ? last_resort1 : last_resort2;
 
 
         }
@@ -186,50 +119,34 @@ public:
 
     }
 
-    static Float computeSolution3D(Float lambda1, Float lambda2, VectorExt values, std::array<VectorExt, 4> &coordinates, Float* M, Matrix velocity) {
-        return lambda1*values[0] + lambda2*values[1] + (1 - lambda1 - lambda2)*values[2] + computeP(coordinates, M, lambda1, lambda2, velocity);
-    }
-
-    static Float computeSolution2D(Float lambda, VectorExt values, std::array<VectorExt, 4> &coordinates, Float* M, int x, int y, Matrix velocity) {
-        return lambda * (values[y] - values[x])  + values[x] + computeP2D(lambda, coordinates, M, x, y, velocity);
-    }
-
-    static Float computeP2D(Float lambda, std::array<VectorExt, 4> &coordinates, Float* M, int x, int y, Matrix velocity) {
-        std::cout << "P2d" << std::endl;
-        VectorExt x5 = lambda*coordinates[y] + (1 - lambda) * coordinates[x];
-        VectorExt e54 = coordinates[3] - x5;
-
-
-        Float p[D];
-        p[0] = (coordinates[1] - coordinates[0]).transpose() * e54;
-        p[1] = (coordinates[2] - coordinates[0]).transpose() * e54;
-        p[2] = (coordinates[3] - coordinates[0]).transpose() * e54;
-        Float P = 0;
-        for(int i = 0; i < D; i++) {
-            for(int j = 0; j < D; j++) {
-                P += p[i]*p[j]* computeScalarProduct(0, i + 1, 0, j + 1, M);
-            }
-        }
-        P = sqrt(P);
-        return sqrt(e54.transpose() * velocity * e54);
+    static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, std::array<VectorExt, 4> &coordinates, Float* M, Matrix velocity, int shift) {
+        auto[rotated_0, sign_0_ignore] = rotate(getGrayCode(0), shift);
+        auto[rotated_1, sign_1_ignore] = rotate(getGrayCode(1), shift);
+        auto[rotated_2, sign_2_ignore] = rotate(getGrayCode(2), shift);
+        rotated_0 = getOriginalNumber(rotated_0);
+        rotated_1 = getOriginalNumber(rotated_1);
+        rotated_2 = getOriginalNumber(rotated_2);
+        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2] + computeP(coordinates, M, lambda1, lambda2, velocity, shift);
     }
 
 
-    static Float computeP(std::array<VectorExt, 4> &coordinates, Float* M, Float lambda1, Float lambda2, Matrix velocity) {
+
+
+    static Float computeP(std::array<VectorExt, 4> &coordinates, Float* M, Float lambda1, Float lambda2, Matrix velocity, int shift) {
 
         std::cout << "P3d" << std::endl;
 
         Float M_prime[3][3];
 //TODO consider improving the M_prime management
-        M_prime[0][0] = computeScalarProduct(0,2,0,2,M);
-        M_prime[1][0] = computeScalarProduct(1,2,0,2,M);
-        M_prime[2][0] = computeScalarProduct(2,3,0,2,M);
-        M_prime[0][1] = computeScalarProduct(0,2,1,2,M);
-        M_prime[1][1] = computeScalarProduct(1,2,1,2,M);
-        M_prime[2][1] = computeScalarProduct(2,3,1,2,M);
-        M_prime[0][2] = computeScalarProduct(0,2,2,3,M);
-        M_prime[1][2] = computeScalarProduct(1,2,2,3,M);
-        M_prime[2][2] = computeScalarProduct(2,3,2,3,M);
+        M_prime[0][0] = computeScalarProduct(0,2,0,2,M,shift);
+        M_prime[1][0] = computeScalarProduct(1,2,0,2,M,shift);
+        M_prime[2][0] = computeScalarProduct(2,3,0,2,M,shift);
+        M_prime[0][1] = computeScalarProduct(0,2,1,2,M,shift);
+        M_prime[1][1] = computeScalarProduct(1,2,1,2,M,shift);
+        M_prime[2][1] = computeScalarProduct(2,3,1,2,M,shift);
+        M_prime[0][2] = computeScalarProduct(0,2,2,3,M,shift);
+        M_prime[1][2] = computeScalarProduct(1,2,2,3,M,shift);
+        M_prime[2][2] = computeScalarProduct(2,3,2,3,M,shift);
         Matrix M_prime_;
         M_prime_ << M_prime[0][0], M_prime[0][1], M_prime[0][2],
                 M_prime[1][0], M_prime[1][1], M_prime[1][2],
@@ -237,37 +154,10 @@ public:
         VectorExt lambda;
         lambda << lambda1, lambda2, 1 ;
         Float computedP = std::sqrt(lambda.transpose() * M_prime_ * lambda);
-        VectorExt x5 = lambda1*coordinates[0] + lambda2*coordinates[1] + (1 - lambda1 - lambda2)*coordinates[2];
-        VectorExt e54 = coordinates[3] - x5;
-        Float correctP = std::sqrt(e54.transpose() * velocity * e54);
-        if(computedP != correctP) {
-            std::cout << "wrong P " << computedP << " " << correctP << std::endl;
-        }
-        return correctP;
+        return computedP;
     }
 
-    static Float computeP1(std::array<VectorExt, 4> &coordinates, Float* M, Float lambda1, Float lambda2, Matrix velocity) {
-        VectorExt x5 = lambda1*coordinates[0] + lambda2*coordinates[1] + (1 - lambda1 - lambda2)*coordinates[2];
-        VectorExt e54 = coordinates[3] - x5;
-        //return std::sqrt(e54.transpose() * velocity * e54);
-        Float p[D];
-        p[0] = (coordinates[1] - coordinates[0]).transpose() * e54;
-        p[1] = (coordinates[2] - coordinates[0]).transpose() * e54;
-        p[2] = (coordinates[3] - coordinates[0]).transpose() * e54;
-        Float P = 0;
-        for(int i = 0; i < D; i++) {
-            for(int j = 0; j < D; j++) {
-                P += p[i]*p[j] * computeScalarProduct(0, i + 1, 0, j + 1, M);
-            }
-        }
-        P = sqrt(P);
-        if (P != std::sqrt(e54.transpose() * velocity * e54)) {
-            std::cout << "wrong scalar product: " << lambda1 << " " << lambda2 << std::endl;
-        } else {
-            std::cout << "correct scalar product: " << lambda1 << " " << lambda2 << std::endl;
-        }
-        return P;
-    }
+
 
 
 
@@ -332,21 +222,41 @@ public:
 
     }
 
-    static Float computeScalarProduct(int k1, int k2, int l1, int l2, Float* M) {
+
+
+    static Float computeScalarProduct(int k1, int k2, int l1, int l2, Float* M, int shift) {
         int k_gray = getGrayCode(k1, k2);
         int l_gray = getGrayCode(l1, l2);
+        auto [k_gray_rotated, sign1] = rotate(k_gray, shift);
+        auto [l_gray_rotated, sign2] = rotate(l_gray, shift);
+        k_gray = k_gray_rotated;
+        l_gray = l_gray_rotated;
+        auto [k1_new, k2_new] = getOriginalNumbers(k_gray);
+        auto [l1_new, l2_new] = getOriginalNumbers(l_gray);
+        std::cout << "from " << k1 << " " << k2 << " " << l1 << " " << l2 << " to ";
+        k1 = k1_new;
+        k2 = k2_new;
+        l1 = l1_new;
+        l2 = l2_new;
+        std::cout << "" << k1 << " " << k2 << " " << l1 << " " << l2 << "\n";
+
+
         if(k_gray != l_gray) {
             int s_gray = k_gray ^ l_gray;
             auto [s1, s2] = getOriginalNumbers(s_gray);
-            int sign = (2 * (s_gray > k_gray) - 1) * (2 * (s_gray > l_gray) - 1);
+            int sign = (2 * (s_gray > k_gray) - 1) * (2 * (s_gray > l_gray) - 1) * sign1 * sign2;
             return sign * 0.5 * (M[getMIndex(k1, k2)] + M[getMIndex(l1, l2)] - M[getMIndex(s1, s2)]);
         } else {
-            return ( (k1 < k2) ? (M[getMIndex(k1,k2)]) : M[getMIndex(k2,k1)]);
+            return ( (k1 < k2) ? (M[getMIndex(k1,k2)]) * sign1 : M[getMIndex(k2,k1)]) * sign1;
         }
     }
 
     static int getGrayCode(int k, int l) {
         return 1<<k | 1<<l;
+    }
+
+    static int getGrayCode(int k) {
+        return 1<<k;
     }
 
     //invert getGrayCode
@@ -371,14 +281,48 @@ public:
             return std::make_tuple(2,3);
         }
         else {
-            printf("wrong gray code\n");
+            printf("wrong gray code %d\n", gray);
             return std::make_tuple(0,0);
+        }
+    }
+
+    static auto getOriginalNumber(int gray) {
+
+        if(gray == 1) {
+            return 0;
+        }
+        else if(gray == 2) {
+            return 1;
+        }
+        else if(gray == 4) {
+            return 2;
+        }
+        else if(gray == 8) {
+            return 3;
+        }
+        else {
+            printf("wrong gray code %d\n", gray);
+            return 0;
         }
     }
 
     //ok
     static int getMIndex(int s1, int s2) {
         return (1<<(s2-1)) - 1 + s1;
+    }
+
+    //return 0 if sign is +, -1 otherwise
+    static auto rotate(int k, int shift) {
+        if(shift == 0) {
+            return std::make_tuple(k, 1);
+        }
+        int carry = (k << (4 - shift)) & 0x0000000F;
+        k = (k >> shift) | carry;
+        carry = carry - ((carry >> 1) & 0x55555555);
+        carry = (carry & 0x33333333) + ((carry >> 2) & 0x33333333);
+        int count = ((carry + (carry >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
+        int mod = count & 1;
+        return std::make_tuple(k, mod == 0 ? 1 : -1);
     }
 
 
