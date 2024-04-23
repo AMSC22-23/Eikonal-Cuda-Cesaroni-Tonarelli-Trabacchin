@@ -130,6 +130,10 @@ public:
         return vertices_per_shape;
     }
 
+    int getNumberTetra() const{
+        return tetra.size() / 4;
+    }
+
     std::vector<int> getNeighbors(size_t vertex) const {
         std::set<int> n;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
@@ -256,7 +260,7 @@ public:
         return parts;
     }
 
-    void getSolutionsVTK(const std::string& output_file_name, int* solutions){
+    void getSolutionsVTK(const std::string& output_file_name, Float* solutions){
         std::ofstream output_file(output_file_name);
 
         //header
