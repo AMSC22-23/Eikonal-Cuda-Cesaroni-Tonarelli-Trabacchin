@@ -1,3 +1,7 @@
+//
+// Created by Melanie Tonarelli on 16/02/24.
+//
+
 
 #include "../localProblem_alt2/include/Phi.hpp"
 #include "../localProblem_alt2/include/solveEikonalLocalProblem.hpp"
@@ -8,19 +12,30 @@ int main() {
     constexpr int D = 3;
     constexpr int N = 4;
     using VectorExt = typename Eikonal::Eikonal_traits<D, N - 2>::VectorExt;
-    VectorExt values;
-    values << 0.26718, 0.405334, 0.275872;
-    //std::array<std::array<double, D>, N> coordinates;
+    using VectorV = typename Eigen::Matrix<double,4,1>;
+    VectorV values;
+    //values << 0.26718, 0.405334, 0.275872, 0.000000;
     std::array<VectorExt, N> coordinates;
-    coordinates[3] = {0.841919,0.511862,1};
+
+
+
+    /*coordinates[3] = {0.25,0.511862,1};
     coordinates[2] = {1, 0.684215, 0.813472};
-    coordinates[1] = {1, 0.6, 1};
+    coordinates[1] = {1, 1.2, 1};
     coordinates[0] = {1, 0.506082 , 0.867624};
+     */
+
+    values << 0.275872, 0.696969, 0.26718, 0.405334;
+    coordinates[3] = {1, 1.2, 1};
+    coordinates[2] = {1, 0.506082 , 0.867624};
+    coordinates[1] = {0.25,0.511862,1};
+    coordinates[0] = {1, 0.684215, 0.813472};
 
     typename Eikonal::Eikonal_traits<D,N - 2>::AnisotropyM velocity;
     velocity << 1,0,0,
             0,1,0,
             0,0,1;
+
     VectorExt e12 = coordinates[1] - coordinates[0];
     VectorExt e13 = coordinates[2] - coordinates[0];
     VectorExt e23 = coordinates[2] - coordinates[1];
@@ -35,12 +50,12 @@ int main() {
     M[4] = e24.transpose() * velocity * e24;
     M[5] = e34.transpose() * velocity * e34;
     Eikonal::SimplexData<D, N> simplex{coordinates, velocity};
-    Eikonal::solveEikonalLocalProblem<N, D> localSolver{simplex,values};
-    auto sol_prof = localSolver();
-    auto [sol_our, lambda1, lambda2] = LocalSolver<D, double>::solve(coordinates, values, M, velocity);
+    //Eikonal::solveEikonalLocalProblem<N, D> localSolver{simplex,values};
+    //auto sol_prof = localSolver();
+    auto [sol_our, lambda1, lambda2] = LocalSolver<D, double>::solve(coordinates, values, M, velocity, 2);
 
-    std::cout << "sol prof = " << sol_prof.value << std::endl;
-    std::cout << "lambda prof = " << sol_prof.lambda << std::endl;
+    //std::cout << "sol prof = " << sol_prof.value << std::endl;
+    //std::cout << "lambda prof = " << sol_prof.lambda << std::endl;
     std::cout << "lambda our = " << lambda1 << " " << lambda2 << std::endl;
     std::cout << "sol our = " << sol_our << std::endl;
 
@@ -71,4 +86,6 @@ int main() {
     std::cout << "rhs2 = " << rhs2 << std::endl;
 
 
+    auto [rotate, sign] = LocalSolver<D, double>::rotate(LocalSolver<D, double>::getGrayCode(1, 2), 2);
+    std::cout << rotate << " " << sign << std::endl;
 }
