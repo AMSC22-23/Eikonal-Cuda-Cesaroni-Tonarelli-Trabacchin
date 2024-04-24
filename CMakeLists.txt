@@ -22,7 +22,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 target_compile_options(main PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-        -arch=sm_6.1
+        -arch=sm_61
         -lpthread
         --expt-relaxed-constexpr
         >)
