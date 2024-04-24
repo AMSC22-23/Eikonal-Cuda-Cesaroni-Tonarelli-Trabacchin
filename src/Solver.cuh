@@ -37,7 +37,7 @@ public:
     }
 
     void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
-        std::vector<cudaStream_t*> streams;
+        std::vector<cudaStream_t> streams;
         int* active_domains;
         bool check = false;
 
@@ -48,24 +48,24 @@ public:
         setSolutionsAndActiveDomains(source_nodes, infinity_value);
         // create streams, one for each domain
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
-            cudaStreamCreate(streams[i]);
+            cudaStreamCreate(&streams[i]);
         }
 
         // loop used to perform domain sweeps
         while(!check){
-            cudaMemcpy(active_domains, active_domains_dev, sizeof(int) * mesh->getPartitionsNumber(), cudaMempcyDeviceToHost);
+            cudaMemcpy(active_domains, active_domains_dev, sizeof(int) * mesh->getPartitionsNumber(), cudaMemcpyDeviceToHost);
             check = false;
             // check if all domains are not active; in that case, the computation is done and there is no need to do other domain sweeps
             for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1) check = true;
             }
-            cudaMemcset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
+            cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
             // perform sweep over active domains
             for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1){
-                    int numBlocks = (partitions_vertices_dev[i] -  (i == 0)? -1 : partitions_vertices_dev[i-1]) / NUM_THREADS + 1;
+                    int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
                     domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
-                                      shapes_dev, ngh, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
+                                      shapes_dev, ngh_dev, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
                                       mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
                 }
             }
@@ -74,8 +74,8 @@ public:
 
         // copy solutions from device to host and print them into a vtk file to allow visualization
         Float* solutions;
-        cudaMemcpy(solutions, solutions_dev.data(), sizeof(Float) * mesh->getNumberVertices().size(), cudaMemcpyDeviceToHost);
-        mesh.getSolutionsVTK(output_file_name, solutions);
+        cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices().size(), cudaMemcpyDeviceToHost);
+        mesh->getSolutionsVTK(output_file_name, solutions);
 
         // destroy streams
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
@@ -89,13 +89,13 @@ public:
 
 
 private:
-    Mesh<D>* mesh;
+    Mesh<D, Float>* mesh;
     int* partitions_vertices_dev;
     int* partitions_tetra_dev;
     Float* geo_dev;
     int* tetra_dev;
     TetraConfig* shapes_dev;
-    int* ngh;
+    int* ngh_dev;
     Float* M_dev;
     Float* solutions_dev;
     int* active_domains_dev;
@@ -103,7 +103,7 @@ private:
     void setSolutionsAndActiveDomains(std::vector<int>& source_nodes, Float infinity_value){
         int* source_nodes_dev;
         cudaMalloc(&source_nodes_dev, sizeof(int) * source_nodes.size());
-        cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMempcyHostToDevice);
+        cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMemcpyHostToDevice);
         int numBlocksInfinity = mesh->getNumberVertices() / NUM_THREADS + 1;
         setSolutionsToInfinity<<<NUM_THREADS, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
