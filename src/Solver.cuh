@@ -69,7 +69,7 @@ public:
             cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
             std::cout<<"ok3 part = " << mesh->getPartitionsNumber() << std::endl;
             // perform sweep over active domains
-            /**
+
             for(int i = 0; i < mesh->getPartitionsNumber() && check; i++){
                 std::cout << "loop i = " << i << std::endl;
                 if(active_domains[i] == 1){
@@ -81,7 +81,7 @@ public:
                                       mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
 
                 }
-            }*/
+            }
             cudaDeviceSynchronize();
         }
 return;
