@@ -19,6 +19,7 @@ public:
         printf("GPU data transfer started\n");
         // Allocate memory in device
         cudaMalloc(&active_domains_dev, sizeof(int) * mesh->getPartitionsNumber());
+        cudaMemset(active_domains_dev,0,sizeof(int) * mesh->getPartitionsNumber());
         cudaMalloc(&partitions_vertices_dev, sizeof(int) * mesh->getPartitionsNumber());
         cudaMalloc(&partitions_tetra_dev, sizeof(int) * mesh->getPartitionsNumber());
         cudaMalloc(&geo_dev, sizeof(Float) * mesh->getNumberVertices() * D);
@@ -42,7 +43,7 @@ public:
         std::cout << "Start solve..." << std::endl;
         std::vector<cudaStream_t> streams;
         int* active_domains;
-        bool check = false;
+        bool check = true;
 
         // allocate host memory
         active_domains = (int*)malloc(sizeof(int) * mesh->getPartitionsNumber());
@@ -55,7 +56,7 @@ public:
         }
 
         // loop used to perform domain sweeps
-        while(!check){
+        while(check){
             std::cout<<"while" << std::endl;
             cudaMemcpy(active_domains, active_domains_dev, sizeof(int) * mesh->getPartitionsNumber(), cudaMemcpyDeviceToHost);
             check = false;
@@ -65,7 +66,7 @@ public:
             }
             cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
             // perform sweep over active domains
-            for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
+            for(int i = 0; i < mesh->getPartitionsNumber() && check; i++){
                 if(active_domains[i] == 1){
                     int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
                     domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
