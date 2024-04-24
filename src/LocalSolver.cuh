@@ -89,7 +89,7 @@ public:
     }
 
 
-    static Float computeP(VectorExt* coordinates, Float* M, Float lambda1, Float lambda2, int shift) {
+    static Float computeP(VectorExt* coordinates, const Float* M, Float lambda1, Float lambda2, int shift) {
         Float M_prime[3][3];
         //TODO consider improving the M_prime management
         M_prime[0][0] = computeScalarProduct(0,2,0,2,M,shift);
@@ -166,7 +166,7 @@ public:
     }
 
 
-    static Float computeScalarProduct(int k1, int k2, int l1, int l2, Float* M, int shift) {
+    static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift) {
         int k_gray = getGrayCode(k1, k2);
         int l_gray = getGrayCode(l1, l2);
         auto [k_gray_rotated, sign1] = rotate(k_gray, shift);
