@@ -73,11 +73,12 @@ public:
                 std::cout << "loop i = " << i << std::endl;
                 if(active_domains[i] == 1){
                     std::cout<<"ok4" << std::endl;
-                    int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
+                    /*int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
                     std::cout<<"before kernel" << std::endl;
                     domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
                                       shapes_dev, ngh_dev, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
                                       mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
+                **/
                 }
             }
             cudaDeviceSynchronize();
