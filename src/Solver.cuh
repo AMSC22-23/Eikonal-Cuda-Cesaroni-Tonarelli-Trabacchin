@@ -84,7 +84,7 @@ public:
             }*/
             //cudaDeviceSynchronize();
         }
-
+return;
         // copy solutions from device to host and print them into a vtk file to allow visualization
         Float* solutions;
         cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
