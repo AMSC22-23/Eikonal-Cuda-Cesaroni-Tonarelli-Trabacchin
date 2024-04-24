@@ -65,7 +65,7 @@ public:
             for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1) check = true;
             }
-            std::cout<<"ok2" << std::endl;
+            std::cout<<"ok2 check = " << check << std::endl;
             cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
             std::cout<<"ok3 part = " << mesh->getPartitionsNumber() << std::endl;
             // perform sweep over active domains
