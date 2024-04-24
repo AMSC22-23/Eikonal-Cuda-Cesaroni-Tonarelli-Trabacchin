@@ -1,7 +1,7 @@
 #ifndef KERNELS
 #define KERNELS
 #include <vector>
-#include <cuda.h>w
+#include <cuda.h>
 #include <random>
 #include <set>
 #include <array>
