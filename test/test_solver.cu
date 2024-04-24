@@ -12,6 +12,7 @@ int main(int argc, char* argv[]){
     const double infinity_value = 2000;
     if(argc == 4)
     {
+        std::cout << "Start main..." << std::endl;
         // Retrieve parameters
         std::string input_fileName = argv[1];
         int num_parts = std::atoi(argv[2]);
@@ -26,19 +27,22 @@ int main(int argc, char* argv[]){
 
         // Instantiating mesh
         Mesh<D,double> mesh(input_fileName, num_parts, M);
-
+        std::cout << "Created mesh..." << std::endl;
         // Setting boundary
         std::vector<int> boundary;
         boundary.push_back(mesh.getNearestVertex(std::array<double, D>({0, 0, 0})));
         // boundary.push_back(mesh.getNearestVertex(std::array<double, D>({1, 1, 1})));
+        std::cout << "Boundary set..." << std::endl;
 
         // Instantiating Eikonal Solver
         Solver<D,double> solver(&mesh);
+        std::cout << "Initialised solver..." << std::endl;
 
         // Solve
         auto start1 = std::chrono::high_resolution_clock::now();
         solver.solve(boundary, tol, infinity_value, output_fileName);
         auto stop1 = std::chrono::high_resolution_clock::now();
+        std::cout << "solved..." << std::endl;
 
 
         // Performance Result Table

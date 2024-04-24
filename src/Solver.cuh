@@ -38,6 +38,7 @@ public:
     }
 
     void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
+        std::cout << "Start solve..." << std::endl;
         std::vector<cudaStream_t> streams;
         int* active_domains;
         bool check = false;
