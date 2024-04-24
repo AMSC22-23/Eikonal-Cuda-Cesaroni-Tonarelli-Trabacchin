@@ -10,13 +10,13 @@ int main(int argc, char* argv[]){
     constexpr int D = 3;
     const double tol = 1e-6;
     const double infinity_value = 2000;
-    if(argc == 5)
+    if(argc == 4)
     {
         // Retrieve parameters
         std::string input_fileName = argv[1];
         int num_parts = std::atoi(argv[2]);
         std::string output_fileName = argv[3];
-        std::string fileName = "../test/output_meshes/" + output_fileName + ".vtk";
+        std::string fileName = "../test/meshes/output_meshes/" + output_fileName + ".vtk";
 
         // Setting velocity matrix
         typename Eikonal::Eikonal_traits<D, 1>::AnisotropyM M;
