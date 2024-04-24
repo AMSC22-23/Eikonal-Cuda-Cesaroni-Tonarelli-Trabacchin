@@ -56,6 +56,7 @@ public:
 
         // loop used to perform domain sweeps
         while(!check){
+            std::cout<<"while" << std::endl;
             cudaMemcpy(active_domains, active_domains_dev, sizeof(int) * mesh->getPartitionsNumber(), cudaMemcpyDeviceToHost);
             check = false;
             // check if all domains are not active; in that case, the computation is done and there is no need to do other domain sweeps
