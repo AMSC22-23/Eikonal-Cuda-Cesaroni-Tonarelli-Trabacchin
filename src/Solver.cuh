@@ -34,6 +34,7 @@ public:
         cudaMemcpy(shapes_dev, mesh->getShapes().data(), sizeof(TetraConfig) * mesh->getShapes().size(), cudaMemcpyHostToDevice);
         cudaMemcpy(ngh_dev, mesh->get_ngh().data(), sizeof(int) * mesh->get_ngh().size(), cudaMemcpyHostToDevice);
         cudaMemcpy(M_dev, mesh->get_M().data(), sizeof(Float) * mesh->get_M().size(), cudaMemcpyHostToDevice);
+        printf("GPU data transfer completed\n");
     }
 
     void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
