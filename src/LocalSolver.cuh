@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include <tuple>
+#include <cuda.h>
 
 template <int D, typename Float>
 class LocalSolver {
@@ -12,8 +13,7 @@ class LocalSolver {
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-    static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
-
+     __host__ __device__ static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
         Float lambda21;
         Float lambda22;
         Float lambda11;
@@ -78,7 +78,7 @@ public:
     }
 
 
-    static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, const Float* M, int shift) {
+    __host__ __device__ static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, const Float* M, int shift) {
         auto[rotated_0, sign_0_ignore] = rotate(getGrayCode(0), shift);
         auto[rotated_1, sign_1_ignore] = rotate(getGrayCode(1), shift);
         auto[rotated_2, sign_2_ignore] = rotate(getGrayCode(2), shift);
@@ -89,7 +89,7 @@ public:
     }
 
 
-    static Float computeP(VectorExt* coordinates, const Float* M, Float lambda1, Float lambda2, int shift) {
+    __host__ __device__ static Float computeP(VectorExt* coordinates, const Float* M, Float lambda1, Float lambda2, int shift) {
         Float M_prime[3][3];
         //TODO consider improving the M_prime management
         M_prime[0][0] = computeScalarProduct(0,2,0,2,M,shift);
@@ -112,7 +112,7 @@ public:
     }
 
 
-    static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
+    __host__ __device__ static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
                         Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
                         Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
         Float a, b, c, d, e, f, g, h, k, a_hat, b_hat, c_hat, delta;
@@ -147,7 +147,7 @@ public:
 
 
     //for face x,y phi = phi(y) - phi(x), alpha = e(x,y)'Me(x,y), beta = e(x,4)'Me(x,y), gamma = e(x,4)'Me(e,4)
-    static void solve2D(Float phi, Float alpha, Float beta, Float gamma, Float* lambda1, Float* lambda2){
+    __host__ __device__ static void solve2D(Float phi, Float alpha, Float beta, Float gamma, Float* lambda1, Float* lambda2){
         Float a = (alpha - phi * phi) * alpha;
         Float b = 2 * beta * (phi * phi - alpha);
         Float c = beta * beta - phi * phi * gamma;
@@ -166,7 +166,7 @@ public:
     }
 
 
-    static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift) {
+    __host__ __device__ static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift) {
         int k_gray = getGrayCode(k1, k2);
         int l_gray = getGrayCode(l1, l2);
         auto [k_gray_rotated, sign1] = rotate(k_gray, shift);
@@ -192,16 +192,16 @@ public:
         }
     }
 
-    static int getGrayCode(int k, int l) {
+    __host__ __device__ static int getGrayCode(int k, int l) {
         return 1<<k | 1<<l;
     }
 
-    static int getGrayCode(int k) {
+    __host__ __device__ static int getGrayCode(int k) {
         return 1<<k;
     }
 
     //invert getGrayCode
-    static auto getOriginalNumbers(int gray) {
+    __host__ __device__ static auto getOriginalNumbers(int gray) {
         if(gray == 3) {
             return std::make_tuple(0,1);
         }
@@ -226,7 +226,7 @@ public:
         }
     }
 
-    static auto getOriginalNumber(int gray) {
+    __host__ __device__ static auto getOriginalNumber(int gray) {
         if(gray == 1) {
             return 0;
         }
@@ -246,12 +246,12 @@ public:
     }
 
     //ok
-    static int getMIndex(int s1, int s2) {
+    __host__ __device__ static int getMIndex(int s1, int s2) {
         return (1<<(s2-1)) - 1 + s1;
     }
 
     //return 0 if sign is +, -1 otherwise
-    static auto rotate(int k, int shift) {
+    __host__ __device__ static auto rotate(int k, int shift) {
         if(shift == 0) {
             return std::make_tuple(k, 1);
         }
