@@ -16,6 +16,7 @@ public:
     }
 
     void gpuDataTransfer(){
+        printf("GPU data transfer started\n");
         // Allocate memory in device
         cudaMalloc(&active_domains_dev, sizeof(int) * mesh->getPartitionsNumber());
         cudaMalloc(&partitions_vertices_dev, sizeof(int) * mesh->getPartitionsNumber());
