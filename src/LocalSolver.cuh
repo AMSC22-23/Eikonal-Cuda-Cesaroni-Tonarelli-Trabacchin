@@ -12,7 +12,7 @@ class LocalSolver {
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-    static auto solve(VectorExt coordinates[], VectorV values, Float* M,  int shift) {
+    static auto solve(VectorExt* coordinates, VectorV values, Float* M,  int shift) {
 
         Float lambda21;
         Float lambda22;
@@ -78,7 +78,7 @@ public:
     }
 
 
-    static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, std::array<VectorExt, 4> &coordinates, Float* M, int shift) {
+    static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, Float* M, int shift) {
         auto[rotated_0, sign_0_ignore] = rotate(getGrayCode(0), shift);
         auto[rotated_1, sign_1_ignore] = rotate(getGrayCode(1), shift);
         auto[rotated_2, sign_2_ignore] = rotate(getGrayCode(2), shift);
@@ -89,7 +89,7 @@ public:
     }
 
 
-    static Float computeP(std::array<VectorExt, 4> &coordinates, Float* M, Float lambda1, Float lambda2, int shift) {
+    static Float computeP(VectorExt* coordinates, Float* M, Float lambda1, Float lambda2, int shift) {
         Float M_prime[3][3];
         //TODO consider improving the M_prime management
         M_prime[0][0] = computeScalarProduct(0,2,0,2,M,shift);

@@ -1,7 +1,7 @@
 #ifndef KERNELS
 #define KERNELS
 #include <vector>
-#include <cuda.h>
+#include <cuda.h>w
 #include <random>
 #include <set>
 #include <array>
@@ -29,10 +29,12 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
     int threadId = threadIdx.x + blockIdx.x * blockDim.x;
     if(threadId < size_sources) {
         solutions_dev[source_nodes_dev[threadId]] = 0;
-
-        for(int i = 0; i < partitions_number; i++){
-            if(source_nodes_dev[threadId] < partitions_vertices_dev[i])
+        bool found = false;
+        for(int i = 0; i < partitions_number && !found; i++) {
+            if (source_nodes_dev[threadId] <= partitions_vertices_dev[i]) {
                 active_domains_dev[i] = 1; //there is no need to use atomic operations since if multiple threads try to access the memory location they all write 1
+                found = true;
+            }
         }
     }
 }
@@ -40,7 +42,7 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
 template <typename Float>
 __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
                             const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict active_domains_dev,
-                            int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value){
+                            int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value, Float tol){
     int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
     int nodeIdGlobal = partitions_vertices_dev[domain_id] + nodeIdDomain;
     //std::array<VectorExt, 4> coordinates;
@@ -48,6 +50,7 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
     VectorV values;
     Float* M;
     Float minimum_sol = infinity_value;
+    int minimum_tetra = -1;
     // each thread takes a node and compute the solution looping over all its associated tetrahedra
     if (nodeIdGlobal < num_vertices){
         for(int i = ngh[nodeIdGlobal]; i < (nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size; i++){
@@ -62,25 +65,27 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
             auto [sol, lambda1, lambda2] = LocalSolver<D, Float>::solve(coordinates, values, M, D + 1 - shapes_dev[i].tetra_config);
             if(sol < minimum_sol) {
                 minimum_sol = sol;
+                minimum_tetra = shapes_dev[i].tetra_index;
             }
         }
-        if(minimum_sol < solutions_dev[nodeIdGlobal]) {
+
+        if(std::abs(minimum_sol - solutions_dev[nodeIdGlobal]) < tol) {
             solutions_dev[nodeIdGlobal] = minimum_sol;
-            active_domains_dev[domain_id] = 1;
+            bool found = false;
+            for (int i = ngh[nodeIdGlobal]; i < (nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size; i++) { //for each tetra associated with the node
+                for (int j = 0; j < D + 1; j++) { //for each vertex in the tetra
+                    found = false;
+                    for (int k = 0; k < num_partitions && !found; k++) { // activate the domains associated with the vertices
+                        if (tetra_dev[shapes_dev[i].tetra_index * (D + 1) + j] <= partitions_vertices_dev[k]) {
+                            active_domains_dev[k] = 1;
+                            found = true;
+                        }
+                    }
+                }
+            }
         }
-
-
-        // TODO modifiy solutions_dev[nodeIdGlobal] to minimum_sol using an atomic
-        // TODO modify active domain
     }
-}
 
-// ad ogni iterazione esterna, facciamo un elenco dei domini attivi (quelli che hanno bisogno di essere sweepati)
-// data questa lista, assegniamo un blocco per ogni sottodominio attivo e facciamo lo sweep, teniamo
-// tutti i dati relativi al sottodominio nella shared memory (vertici, tetraedri, matrici M, soluzioni parziali)
-// quando modifichiamo la soluzione di un vertice, dobbiamo verificare a quelle sottodominio appartiene quel vertice
-// e se quel vertice appartiene al sottodominio N (diverso da quello attuale) allora rendiamo attivo N per
-// la prossima iterazione. i dati del partition vector possono essere memorizzati nella read-only cache
-// per poter verificare il dominio di appartenenza dei vertici
+}
 
 #endif

@@ -1,8 +1,3 @@
-//
-// Created by Melanie Tonarelli on 16/02/24.
-//
-
-
 #include "../localProblem_alt2/include/Phi.hpp"
 #include "../localProblem_alt2/include/solveEikonalLocalProblem.hpp"
 #include <iostream>
@@ -52,19 +47,19 @@ int main() {
     Eikonal::SimplexData<D, N> simplex{coordinates, velocity};
     //Eikonal::solveEikonalLocalProblem<N, D> localSolver{simplex,values};
     //auto sol_prof = localSolver();
-    auto [sol_our, lambda1, lambda2] = LocalSolver<D, double>::solve(coordinates, values, M, 2);
+    //auto [sol_our, lambda1, lambda2] = LocalSolver<D, double>::solve(coordinates, values, M, 2);
 
     //std::cout << "sol prof = " << sol_prof.value << std::endl;
     //std::cout << "lambda prof = " << sol_prof.lambda << std::endl;
-    std::cout << "lambda our = " << lambda1 << " " << lambda2 << std::endl;
-    std::cout << "sol our = " << sol_our << std::endl;
+    //std::cout << "lambda our = " << lambda1 << " " << lambda2 << std::endl;
+    //std::cout << "sol our = " << sol_our << std::endl;
 
 
     VectorExt alpha;
     VectorExt beta;
     VectorExt gamma;
     VectorExt sol;
-    sol << lambda1, lambda2, 1.0 - lambda1 - lambda2;
+    //sol << lambda1, lambda2, 1.0 - lambda1 - lambda2;
 
     alpha << e13.transpose() * velocity * e13, e23.transpose() * velocity * e13, e34.transpose() * velocity * e13;
     beta << e13.transpose() * velocity * e23, e23.transpose() * velocity * e23, e34.transpose() * velocity * e23;
