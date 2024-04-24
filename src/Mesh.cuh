@@ -96,6 +96,7 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
+        std::cout << "init_mesh completed" << std::endl;
         tetra.resize(sets.size() * (D+1));
         unsigned int i = 0;
         for(auto &t : sets) {
@@ -108,9 +109,11 @@ public:
         }
 
         std::vector<Matrix> tempM;
+        tempM.resize(tetra.size()/(D+1));
         for(i = 0; i < tetra.size() / (D + 1); i++){
             tempM[i] = velocity;
         }
+        std::cout<<"tetra" << std::endl;
         execute_metis(tempM);
 
         std::vector<std::vector<int>> g;
