@@ -74,7 +74,7 @@ public:
 
         // copy solutions from device to host and print them into a vtk file to allow visualization
         Float* solutions;
-        cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices().size(), cudaMemcpyDeviceToHost);
+        cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
         mesh->getSolutionsVTK(output_file_name, solutions);
 
         // destroy streams
@@ -108,7 +108,7 @@ private:
         setSolutionsToInfinity<<<NUM_THREADS, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
         cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
-        setSolutionsSourcesAndDomains<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, source_nodes.size());
+        setSolutionsSourcesAndDomains<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, active_domains_dev, partitions_vertices_dev, mesh->getPartitionsNumber(), source_nodes.size());
         cudaFree(&source_nodes_dev);
     }
 

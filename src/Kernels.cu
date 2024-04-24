@@ -48,7 +48,7 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
     //std::array<VectorExt, 4> coordinates;
     VectorExt coordinates[4];
     VectorV values;
-    Float* M;
+    const Float* M;
     Float minimum_sol = infinity_value;
     // each thread takes a node and compute the solution looping over all its associated tetrahedra
     if (nodeIdGlobal < num_vertices){
