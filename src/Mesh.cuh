@@ -30,6 +30,7 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts, const std::string& matrix_file_path) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
+        std::cout << "init_mesh completed" << std::endl;
         tetra.resize(sets.size() * (D+1));
         int i = 0;
         for(auto &t : sets) {
