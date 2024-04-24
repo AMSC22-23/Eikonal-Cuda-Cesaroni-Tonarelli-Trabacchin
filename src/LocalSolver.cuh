@@ -78,7 +78,7 @@ public:
     }
 
 
-    static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, Float* M, int shift) {
+    static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, const Float* M, int shift) {
         auto[rotated_0, sign_0_ignore] = rotate(getGrayCode(0), shift);
         auto[rotated_1, sign_1_ignore] = rotate(getGrayCode(1), shift);
         auto[rotated_2, sign_2_ignore] = rotate(getGrayCode(2), shift);
