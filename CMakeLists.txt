@@ -10,11 +10,16 @@ include_directories(test)
 include_directories("localProblem_alt2/include")
 include_directories("/u/sw/toolchains/gcc-glibc/11.2.0/pkgs/eigen/3.3.9/include/eigen3")
 
-add_executable(test test/test_local_solver.cpp src/Kernels.cu)
+add_executable(test test/test_local_solver.cpp src/Kernels.cu src/Solver.cuh)
 
 set_target_properties(test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+target_compile_options(test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+        -O3
+        -lpthread
+        >)
+
