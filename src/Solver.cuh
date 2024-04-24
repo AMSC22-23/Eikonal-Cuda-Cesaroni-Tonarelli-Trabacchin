@@ -59,6 +59,7 @@ public:
 
         // prepare the data
         setSolutionsAndActiveDomains(source_nodes, infinity_value);
+        std::cout<<"passed set solutions" << std::endl;
         // create streams, one for each domain
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
             cudaStreamCreate(&streams[i]);
