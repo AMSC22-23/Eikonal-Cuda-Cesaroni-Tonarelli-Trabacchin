@@ -4,6 +4,7 @@
 #include <cuda.h>
 #include <random>
 #include <set>
+#include <array>
 #include "../localProblem_alt2/include/Phi.hpp"
 #include "../localProblem_alt2/include/solveEikonalLocalProblem.hpp"
 #include "Mesh.cuh"
@@ -37,31 +38,38 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
 }
 
 template <typename Float>
-__global__ void domainSweep(int domain_id, int* partitions_vertices_dev, int* partitions_tetra_dev, Float* geo_dev, int* tetra_dev,
-                            TetraConfig* shapes_dev, int* ngh, Float* M_dev, Float* solutions_dev, int* active_domains_dev,
+__global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
+                            const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict active_domains_dev,
                             int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value){
     int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
     int nodeIdGlobal = partitions_vertices_dev[domain_id] + nodeIdDomain;
-    std::array<VectorExt, 4> coordinates;
+    //std::array<VectorExt, 4> coordinates;
+    VectorExt coordinates[4];
     VectorV values;
     Float* M;
     Float minimum_sol = infinity_value;
-    Float lambda1, lambda2;
     // each thread takes a node and compute the solution looping over all its associated tetrahedra
     if (nodeIdGlobal < num_vertices){
         for(int i = ngh[nodeIdGlobal]; i < (nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size; i++){
             // call local solver on tetra[shapes_dev[i].tetra_index] using configuration shapes_dev[i].tetra_config
             for(int j = 0; j < D + 1; j++){
                 for(int k = 0; k < D; k++) {
-                    coordinates[j][k] = geo_dev[tetra_dev[shapes_dev[i].tetra_index + j] + k];
+                    coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * shapes_dev[i].tetra_index + j] + k];
                 }
-                values[j] = solutions_dev[tetra_dev[shapes_dev[i].tetra_index + j]];
+                values[j] = solutions_dev[tetra_dev[(D+1) * shapes_dev[i].tetra_index + j]];
             }
             M = M_dev + shapes_dev[i].tetra_index * 6;
             auto [sol, lambda1, lambda2] = LocalSolver<D, Float>::solve(coordinates, values, M, D + 1 - shapes_dev[i].tetra_config);
-            if(sol < minimum_sol)
+            if(sol < minimum_sol) {
                 minimum_sol = sol;
+            }
         }
+        if(minimum_sol < solutions_dev[nodeIdGlobal]) {
+            solutions_dev[nodeIdGlobal] = minimum_sol;
+            active_domains_dev[domain_id] = 1;
+        }
+
+
         // TODO modifiy solutions_dev[nodeIdGlobal] to minimum_sol using an atomic
         // TODO modify active domain
     }

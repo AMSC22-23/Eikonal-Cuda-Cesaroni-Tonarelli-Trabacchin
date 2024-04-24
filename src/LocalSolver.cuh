@@ -12,7 +12,7 @@ class LocalSolver {
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-    static auto solve(std::array<VectorExt, 4> coordinates, VectorV values, Float* M,  int shift) {
+    static auto solve(VectorExt coordinates[], VectorV values, Float* M,  int shift) {
 
         Float lambda21;
         Float lambda22;
