@@ -93,6 +93,75 @@ public:
         }*/
     }
 
+    Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
+        std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
+        tetra.resize(sets.size() * (D+1));
+        int i = 0;
+        for(auto &t : sets) {
+            int j = 0;
+            for(auto &v : t) {
+                tetra[i+j] = v;
+                j++;
+            }
+            i += D+1;
+        }
+
+        std::vector<Matrix> tempM;
+        for(int i = 0; i < tetra.size() / (D + 1); i++){
+            tempM[i] = velocity;
+        }
+        execute_metis(tempM);
+
+        std::vector<std::vector<int>> g;
+        g.resize(getNumberVertices());
+        for(int i = 0; i < tetra.size(); i += D+1) {
+            for(int j = 0; j < D + 1; j++) {
+                g[tetra[j+i]].push_back(i/(D+1));
+            }
+        }
+
+        ngh.resize(getNumberVertices());
+        ngh[0] = 0;
+        int cont = 0;
+        for(int i = 1; i < ngh.size(); i++) {
+            ngh[i] = ngh[i-1] + g[i - 1].size();
+            cont += g[i-1].size();
+        }
+        cont += g[ngh.size()-1].size();
+        shapes.resize(cont);
+        cont = 0;
+
+        for(i = 0; i < g.size(); i++) {
+            for(int j = 0; j < g[i].size(); j++) {
+                shapes[cont].tetra_index = g[i][j];
+                int tetra_to_search = g[i][j];
+                for(int k = 0; k < 4; k++) {
+                    if(tetra[4 * tetra_to_search + k] == i) {
+                        shapes[cont].tetra_config = k + 1;
+                    }
+                }
+                cont++;
+            }
+        }
+
+        /*
+        for(auto &x : g) {
+            for(auto &y : x) {
+                shapes[cont] = y;
+                cont++;
+            }
+        }
+         */
+
+        /*indices.resize(getNumberVertices());
+        for(int i = 0; i < getNumberVertices(); i++){
+            indices[i] = neighbors.size();
+            std::vector<int> n = getNeighbors(i);
+            neighbors.insert(neighbors.end(), n.begin(), n.end());
+        }*/
+    }
+
+
     void execute_metis(std::vector<Matrix> tempM) {
         print_file_metis();
         system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number)).c_str());

@@ -5,6 +5,9 @@
 #include "Kernels.cu"
 #include <cuda.h>
 
+constexpr int NUM_THREADS = 1024;
+constexpr int SIZE_WARP = 32;
+
 template <int D,typename Float>
 class Solver {
 public:
@@ -33,7 +36,7 @@ public:
         cudaMemcpy(M_dev, mesh->get_M().data(), sizeof(Float) * mesh->get_M().size(), cudaMemcpyHostToDevice);
     }
 
-    void solve(std::vector<int> source_nodes, Float infinity_value, const std::string& output_file_name){
+    void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
         std::vector<cudaStream_t*> streams;
         int* active_domains;
         bool check = false;
@@ -60,10 +63,10 @@ public:
             // perform sweep over active domains
             for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1){
-                    // TODO compute right number of blocks and threads per block
-                    domainSweep<<<1024, 2, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
+                    int numBlocks = (partitions_vertices_dev[i] -  (i == 0)? -1 : partitions_vertices_dev[i-1]) / NUM_THREADS + 1;
+                    domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
                                       shapes_dev, ngh, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
-                                      mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value);
+                                      mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
                 }
             }
             cudaDeviceSynchronize();
@@ -101,16 +104,14 @@ private:
         int* source_nodes_dev;
         cudaMalloc(&source_nodes_dev, sizeof(int) * source_nodes.size());
         cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMempcyHostToDevice);
-        int numBlocksInfinity = mesh->getNumberVertices() / 1024 + 1;
-        setSolutionsToInfinity<<<1024, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
-        int numBlocksSources = source_nodes.size() / 32 + 1;
+        int numBlocksInfinity = mesh->getNumberVertices() / NUM_THREADS + 1;
+        setSolutionsToInfinity<<<NUM_THREADS, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
+        int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
         cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
-        setSolutionsSourcesAndDomains<<<32, numBlocksSources>>>(solutions_dev, source_nodes_dev, source_nodes.size());
+        setSolutionsSourcesAndDomains<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, source_nodes.size());
         cudaFree(&source_nodes_dev);
     }
 
-
 };
-
 
 #endif //EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_SOLVER_CUH
