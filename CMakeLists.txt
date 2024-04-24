@@ -21,8 +21,15 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+target_compile_options(main PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+        -O3
+        -lpthread
+        --expt-relaxed-constexpr
+        >)
+
 target_compile_options(test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
         -O3
         -lpthread
+        --expt-relaxed-constexpr
         >)
 
