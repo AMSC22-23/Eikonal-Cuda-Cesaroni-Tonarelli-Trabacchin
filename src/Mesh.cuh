@@ -46,7 +46,7 @@ public:
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
-        for(int i = 0; i < tetra.size(); i += D+1) {
+        for(i = 0; i < tetra.size(); i += D+1) {
             for(int j = 0; j < D + 1; j++) {
                 g[tetra[j+i]].push_back(i/(D+1));
             }
@@ -54,8 +54,8 @@ public:
 
         ngh.resize(getNumberVertices());
         ngh[0] = 0;
-        int cont = 0;
-        for(int i = 1; i < ngh.size(); i++) {
+        unsigned int cont = 0;
+        for(i = 1; i < ngh.size(); i++) {
             ngh[i] = ngh[i-1] + g[i - 1].size();
             cont += g[i-1].size();
         }
@@ -96,7 +96,7 @@ public:
     Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
         tetra.resize(sets.size() * (D+1));
-        int i = 0;
+        unsigned int i = 0;
         for(auto &t : sets) {
             int j = 0;
             for(auto &v : t) {
@@ -107,14 +107,14 @@ public:
         }
 
         std::vector<Matrix> tempM;
-        for(int i = 0; i < tetra.size() / (D + 1); i++){
+        for(i = 0; i < tetra.size() / (D + 1); i++){
             tempM[i] = velocity;
         }
         execute_metis(tempM);
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
-        for(int i = 0; i < tetra.size(); i += D+1) {
+        for(i = 0; i < tetra.size(); i += D+1) {
             for(int j = 0; j < D + 1; j++) {
                 g[tetra[j+i]].push_back(i/(D+1));
             }
@@ -122,8 +122,8 @@ public:
 
         ngh.resize(getNumberVertices());
         ngh[0] = 0;
-        int cont = 0;
-        for(int i = 1; i < ngh.size(); i++) {
+        unsigned int cont = 0;
+        for(i = 1; i < ngh.size(); i++) {
             ngh[i] = ngh[i-1] + g[i - 1].size();
             cont += g[i-1].size();
         }
@@ -175,7 +175,7 @@ public:
     std::string toString() {
         size_t cont = 0;
         int index = 0;
-        std::string res = "";
+        std::string res;
         while(true) {
             res+= "vertex " + std::to_string(cont) + ": " ;
             for(size_t i = index; i < (cont < ngh.size()-1 ? ngh[cont+1] : shapes.size()); i += vertices_per_shape - 1){

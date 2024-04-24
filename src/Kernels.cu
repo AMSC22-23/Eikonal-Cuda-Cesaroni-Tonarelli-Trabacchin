@@ -1,7 +1,7 @@
 #ifndef KERNELS
 #define KERNELS
 #include <vector>
-#include <cuda.h>w
+#include <cuda.h>
 #include <random>
 #include <set>
 #include <array>
@@ -18,7 +18,7 @@ using VectorV = typename Eigen::Matrix<double,4,1>;
 
 template <typename Float>
 __global__ void setSolutionsToInfinity(Float* solutions_dev, Float infinity_value, size_t size_sol){
-    int threadId = threadIdx.x + blockIdx.x * blockDim.x;
+    unsigned int threadId = threadIdx.x + blockIdx.x * blockDim.x;
     if(threadId < size_sol){
         solutions_dev[threadId] = infinity_value;
     }
@@ -26,7 +26,7 @@ __global__ void setSolutionsToInfinity(Float* solutions_dev, Float infinity_valu
 
 template <typename Float>
 __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_nodes_dev, int* active_domains_dev, int* partitions_vertices_dev, int partitions_number, size_t size_sources){
-    int threadId = threadIdx.x + blockIdx.x * blockDim.x;
+    unsigned int threadId = threadIdx.x + blockIdx.x * blockDim.x;
     if(threadId < size_sources) {
         solutions_dev[source_nodes_dev[threadId]] = 0;
         bool found = false;
@@ -43,14 +43,13 @@ template <typename Float>
 __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
                             const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict active_domains_dev,
                             int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value, Float tol){
-    int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
-    int nodeIdGlobal = partitions_vertices_dev[domain_id] + nodeIdDomain;
+    unsigned int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
+    unsigned int nodeIdGlobal = partitions_vertices_dev[domain_id] + nodeIdDomain;
     //std::array<VectorExt, 4> coordinates;
     VectorExt coordinates[4];
     VectorV values;
     Float* M;
     Float minimum_sol = infinity_value;
-    int minimum_tetra = -1;
     // each thread takes a node and compute the solution looping over all its associated tetrahedra
     if (nodeIdGlobal < num_vertices){
         for(int i = ngh[nodeIdGlobal]; i < (nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size; i++){
@@ -65,7 +64,6 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
             auto [sol, lambda1, lambda2] = LocalSolver<D, Float>::solve(coordinates, values, M, D + 1 - shapes_dev[i].tetra_config);
             if(sol < minimum_sol) {
                 minimum_sol = sol;
-                minimum_tetra = shapes_dev[i].tetra_index;
             }
         }
 
