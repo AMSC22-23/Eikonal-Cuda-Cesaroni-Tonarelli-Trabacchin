@@ -60,14 +60,18 @@ public:
             std::cout<<"while" << std::endl;
             cudaMemcpy(active_domains, active_domains_dev, sizeof(int) * mesh->getPartitionsNumber(), cudaMemcpyDeviceToHost);
             check = false;
+            std::cout<<"ok1" << std::endl;
             // check if all domains are not active; in that case, the computation is done and there is no need to do other domain sweeps
             for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1) check = true;
             }
+            std::cout<<"ok2" << std::endl;
             cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
+            std::cout<<"ok3" << std::endl;
             // perform sweep over active domains
             for(int i = 0; i < mesh->getPartitionsNumber() && check; i++){
                 if(active_domains[i] == 1){
+                    std::cout<<"ok4" << std::endl;
                     int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
                     std::cout<<"before kernel" << std::endl;
                     domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
