@@ -129,6 +129,7 @@ private:
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
         cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
         setSolutionsSourcesAndDomains<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, active_domains_dev, partitions_vertices_dev, mesh->getPartitionsNumber(), source_nodes.size());
+        cudaCheck(cudaDeviceSynchronize());
         cudaCheck(cudaFree(&source_nodes_dev));
     }
 
