@@ -175,12 +175,10 @@ public:
         l_gray = l_gray_rotated;
         auto [k1_new, k2_new] = getOriginalNumbers(k_gray);
         auto [l1_new, l2_new] = getOriginalNumbers(l_gray);
-        std::cout << "from " << k1 << " " << k2 << " " << l1 << " " << l2 << " to ";
         k1 = k1_new;
         k2 = k2_new;
         l1 = l1_new;
         l2 = l2_new;
-        std::cout << "" << k1 << " " << k2 << " " << l1 << " " << l2 << "\n";
 
         if(k_gray != l_gray) {
             int s_gray = k_gray ^ l_gray;
