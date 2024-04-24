@@ -26,6 +26,7 @@ int main(int argc, char* argv[]){
                 0, 0, 1;
 
         // Instantiating mesh
+        std::cout << "creating mesh" << std::endl;
         Mesh<D,double> mesh(input_fileName, num_parts, M);
         std::cout << "Created mesh..." << std::endl;
         // Setting boundary
