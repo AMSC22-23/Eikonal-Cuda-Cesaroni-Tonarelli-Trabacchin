@@ -67,9 +67,10 @@ public:
             }
             std::cout<<"ok2" << std::endl;
             cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
-            std::cout<<"ok3" << std::endl;
+            std::cout<<"ok3 part = " << mesh->getPartitionsNumber() << std::endl;
             // perform sweep over active domains
             for(int i = 0; i < mesh->getPartitionsNumber() && check; i++){
+                std::cout << "loop i = " << i << std::endl;
                 if(active_domains[i] == 1){
                     std::cout<<"ok4" << std::endl;
                     int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
