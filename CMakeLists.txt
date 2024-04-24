@@ -10,7 +10,7 @@ include_directories(test)
 include_directories("localProblem_alt2/include")
 include_directories("/u/sw/toolchains/gcc-glibc/11.2.0/pkgs/eigen/3.3.9/include/eigen3")
 
-add_executable(test test/test_local_solver.cpp src/Kernels.cu src/Solver.cuh)
+add_executable(test test/test_local_solver.cu src/Kernels.cu src/Solver.cuh)
 
 add_executable(main test/test_solver.cu src/Solver.cuh src/Mesh.cuh)
 
