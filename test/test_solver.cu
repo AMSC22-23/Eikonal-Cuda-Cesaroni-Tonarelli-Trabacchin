@@ -1,5 +1,6 @@
 #include "../src/Solver.cuh"
 #include "../src/Mesh.cuh"
+#include "../src/CudaEikonalTraits.cuh"
 
 #include <string>
 #include <iostream>
@@ -8,7 +9,11 @@
 
 int main(int argc, char* argv[]){
     constexpr int D = 3;
-    const double tol = 1e-6;
+    const double tol = 1e-3;
+    using VectorExt = typename CudaEikonalTraits<float, D>::VectorExt;
+    using VectorV = typename CudaEikonalTraits<float, D>::VectorV;
+    using Matrix = typename CudaEikonalTraits<float, D>::Matrix;
+
     const double infinity_value = 2000;
     if(argc == 4)
     {
@@ -20,28 +25,31 @@ int main(int argc, char* argv[]){
         std::string fileName = "../test/meshes/output_meshes/" + output_fileName + ".vtk";
 
         // Setting velocity matrix
-        typename Eikonal::Eikonal_traits<D, 1>::AnisotropyM M;
-        M << 1, 0, 0,
-                0, 1, 0,
-                0, 0, 1;
+        //Matrix M {1, 0, 0, 0, 1, 0, 0, 0, 1};
+        Matrix M;
+        M << 1,0,0,
+            0,1,0,
+            0,0,1;
+            
+
 
         // Instantiating mesh
         std::cout << "creating mesh" << std::endl;
-        Mesh<D,double> mesh(input_fileName, num_parts, M);
+        Mesh<D,float> mesh(input_fileName, num_parts, M);
         std::cout << "Created mesh..." << std::endl;
         // Setting boundary
         std::vector<int> boundary;
-        boundary.push_back(mesh.getNearestVertex(std::array<double, D>({0, 0, 0})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 0, 0})));
         // boundary.push_back(mesh.getNearestVertex(std::array<double, D>({1, 1, 1})));
         std::cout << "Boundary set..." << std::endl;
 
         // Instantiating Eikonal Solver
-        Solver<D,double> solver(&mesh);
+        Solver<D,float> solver(&mesh);
         std::cout << "Initialised solver..." << std::endl;
 
         // Solve
         auto start1 = std::chrono::high_resolution_clock::now();
-        solver.solve(boundary, tol, infinity_value, output_fileName);
+        solver.solve(boundary, tol, infinity_value, fileName);
         auto stop1 = std::chrono::high_resolution_clock::now();
         std::cout << "solved..." << std::endl;
 

@@ -17,7 +17,7 @@ class LocalSolver {
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-    __host__ __device__ static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
+     __host__ __device__ static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
         Float lambda21;
         Float lambda22;
         Float lambda11;
@@ -52,9 +52,9 @@ public:
         bool acceptable22 = !std::isnan(lambda22) && lambda22 > 0 && lambda22 < 1;
 
         //xy (lambda11, lambda21), (lambda12, lambda22)
+        Float phi4_1 = computeSolution3D(lambda11, lambda21, values, coordinates, M,  shift);
+        Float phi4_2 = computeSolution3D(lambda12, lambda22, values, coordinates, M,  shift);
         if(acceptable21 && acceptable11 && acceptable12 && acceptable22) {
-            Float phi4_1 = computeSolution3D(lambda11, lambda21, values, coordinates, M,  shift);
-            Float phi4_2 = computeSolution3D(lambda12, lambda22, values, coordinates, M,  shift);
             if(phi4_1 < phi4_2) {
                 return std::make_tuple(phi4_1, lambda11, lambda21);
             } else {
@@ -63,13 +63,13 @@ public:
         } else if((!acceptable12 || !acceptable22) && acceptable21 && acceptable11) {
             lambda1 = lambda11;
             lambda2 = lambda21;
-            Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M,  shift);
-            return std::make_tuple(phi4, lambda1, lambda2);
+            //Float phi4 = phi4_1; //computeSolution3D(lambda1, lambda2, values, coordinates, M,  shift);
+            return std::make_tuple(phi4_1, lambda11, lambda21);
         } else if(acceptable12 && acceptable22 && (!acceptable21 || !acceptable11)) {
             lambda1 = lambda21;
             lambda2 = lambda22;
-            Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M,  shift);
-            return std::make_tuple(phi4, lambda1, lambda2);
+            //Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M,  shift);
+            return std::make_tuple(phi4_2, lambda21, lambda22);
         } else {
             Float last_resort1 = computeSolution3D(1, 0, values, coordinates, M,  shift);
             Float last_resort2 = computeSolution3D(0, 1, values, coordinates, M, shift);
@@ -89,8 +89,8 @@ public:
         rotated_0 = getOriginalNumber(rotated_0);
         rotated_1 = getOriginalNumber(rotated_1);
         rotated_2 = getOriginalNumber(rotated_2);
-        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2]
-               + computeP(coordinates, M, lambda1, lambda2, shift);
+        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2] 
+        + computeP(coordinates, M, lambda1, lambda2, shift);
     }
 
 
@@ -110,10 +110,10 @@ public:
             M_prime[1][0], M_prime[1][1], M_prime[1][2],
             M_prime[2][0], M_prime[2][1], M_prime[2][2] };; */
         M_prime_ << M_prime[0][0], M_prime[0][1], M_prime[0][2],
-                M_prime[1][0], M_prime[1][1], M_prime[1][2],
-                M_prime[2][0], M_prime[2][1], M_prime[2][2] ;
-
-
+        M_prime[1][0], M_prime[1][1], M_prime[1][2],
+        M_prime[2][0], M_prime[2][1], M_prime[2][2] ;
+        
+        
         VectorExt lambda ;//{lambda1, lambda2, 1};
         lambda << lambda1, lambda2, 1;
         Float computedP = std::sqrt(lambda.transpose() * ( M_prime_ * lambda ));
@@ -122,8 +122,8 @@ public:
 
 
     __host__ __device__ static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
-                                            Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
-                                            Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
+                        Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
+                        Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
         Float a, b, c, d, e, f, g, h, k, a_hat, b_hat, c_hat, delta;
 
         a = phi2 * (alpha1 - alpha3) - phi1 * (beta1 - beta3);
@@ -270,7 +270,6 @@ public:
         int mod = count & 1;
         return std::make_tuple(k, mod == 0 ? 1 : -1);
     }
-
 
 };
 

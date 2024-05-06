@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/test.dir/test/test_local_solver.cu.o CMakeFiles/test.dir/src/Kernels.cu.o CMakeFiles/test.dir/cmake_device_link.o -o test  -lcudadevrt -lcudart_static -lrt -lpthread -ldl  -L"/usr/local/cuda/targets/x86_64-linux/lib/stubs" -L"/usr/local/cuda/targets/x86_64-linux/lib"
