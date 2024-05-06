@@ -39,7 +39,7 @@ where $c$ represents the celerity of the wave.
 ## Description
 
 ## Usage
-After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, run the following:
+After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, access the repo and run the following:
 ```bash
 $ mkdir lib
 $ cd lib
