@@ -15,6 +15,15 @@ public:
         gpuDataTransfer();
     }
 
+    static bool cudaCheck(cudaError_t err, std::string mess) {
+        if(err != CUDA_SUCCESS) {
+            std::cout << "cuda err = " << err << std::endl;
+            std::cout << "mess = "<< mess << std::endl;
+
+            exit(1);
+        }
+    }
+
     void gpuDataTransfer(){
         printf("GPU data transfer started\n");
         // Allocate memory in device
@@ -42,6 +51,7 @@ public:
     void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
         std::cout << "Start solve..." << std::endl;
         std::vector<cudaStream_t> streams;
+        streams.resize(mesh->getPartitionsNumber());
         int* active_domains;
         bool check = true;
 
@@ -50,10 +60,12 @@ public:
 
         // prepare the data
         setSolutionsAndActiveDomains(source_nodes, infinity_value);
+        std::cout<<"passed set solutions" << std::endl;
         // create streams, one for each domain
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
             cudaStreamCreate(&streams[i]);
         }
+        std::cout<<"passed set streams" << std::endl;
 
         // loop used to perform domain sweeps
         while(check){
@@ -65,26 +77,26 @@ public:
             for(int i = 0; i < mesh->getPartitionsNumber() && !check; i++){
                 if(active_domains[i] == 1) check = true;
             }
-            std::cout<<"ok2" << std::endl;
+            std::cout<<"ok2 check = " << check << std::endl;
             cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
             std::cout<<"ok3 part = " << mesh->getPartitionsNumber() << std::endl;
             // perform sweep over active domains
-            /**
+
             for(int i = 0; i < mesh->getPartitionsNumber() && check; i++){
                 std::cout << "loop i = " << i << std::endl;
                 if(active_domains[i] == 1){
                     std::cout<<"ok4" << std::endl;
-                    int numBlocks = (partitions_vertices_dev[i] -  ((i == 0) ? -1 : partitions_vertices_dev[i-1])) / NUM_THREADS + 1;
+                    int numBlocks = (mesh->getPartitionVertices()[i] -  ((i == 0) ? -1 : mesh->getPartitionVertices()[i-1])) / NUM_THREADS + 1;
                     std::cout<<"before kernel" << std::endl;
                     domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
                                       shapes_dev, ngh_dev, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
                                       mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
 
                 }
-            }*/
-            //cudaDeviceSynchronize();
+            }
+            cudaDeviceSynchronize();
         }
-
+return;
         // copy solutions from device to host and print them into a vtk file to allow visualization
         Float* solutions;
         cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
@@ -116,13 +128,15 @@ private:
     void setSolutionsAndActiveDomains(std::vector<int>& source_nodes, Float infinity_value){
         int* source_nodes_dev;
         cudaMalloc(&source_nodes_dev, sizeof(int) * source_nodes.size());
-        cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMemcpyHostToDevice);
+        cudaCheck(cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMemcpyHostToDevice), "mem1");
         int numBlocksInfinity = mesh->getNumberVertices() / NUM_THREADS + 1;
         setSolutionsToInfinity<<<NUM_THREADS, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
+        cudaCheck(cudaDeviceSynchronize(), "mem3");
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
         cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
         setSolutionsSourcesAndDomains<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, active_domains_dev, partitions_vertices_dev, mesh->getPartitionsNumber(), source_nodes.size());
-        cudaFree(&source_nodes_dev);
+        cudaCheck(cudaDeviceSynchronize(), "kernel");
+        cudaCheck(cudaFree(source_nodes_dev), "free");
     }
 
 };
