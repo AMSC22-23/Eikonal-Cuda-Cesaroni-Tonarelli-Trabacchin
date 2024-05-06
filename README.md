@@ -37,3 +37,30 @@ u(x) = g(x) & \quad x \in \Gamma \subset \partial\Omega
 where $c$ represents the celerity of the wave.
 
 ## Description
+
+## Usage
+After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, run the following:
+```bash
+$ mkdir lib
+$ cd lib
+$ git clone https://github.com/KarypisLab/GKlib.git
+$ make config
+$ make
+$ cd ..
+$ git clone https://github.com/KarypisLab/METIS.git
+$ cd METIS
+$ make config shared=1 cc=gcc prefix=~/local
+$ make install
+```
+
+Then, to build the executable, from the root folder run the following commands:
+```bash
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+```
+An executable for each test will be created into `/build`, and can be executed through:
+```bash
+$ ./test_name input-filename num-partitions output-filename
+```
