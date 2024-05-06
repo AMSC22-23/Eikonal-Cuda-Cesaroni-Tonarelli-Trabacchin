@@ -4,16 +4,20 @@
 #include <limits>
 #include <tuple>
 #include <cuda.h>
+#include "../src/CudaEikonalTraits.cuh"
 
-template <int D, typename Float>
+template <size_t D, typename Float>
 class LocalSolver {
-    using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
+    /*using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
     using Matrix = typename Eikonal::Eikonal_traits<D,2>::AnisotropyM;
-    using VectorV = typename Eigen::Matrix<double,4,1>;
+    using VectorV = typename Eigen::Matrix<double,4,1>;*/
+    using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
+    using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
+    using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-     __host__ __device__ static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
+    __host__ __device__ static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
         Float lambda21;
         Float lambda22;
         Float lambda11;
@@ -85,7 +89,8 @@ public:
         rotated_0 = getOriginalNumber(rotated_0);
         rotated_1 = getOriginalNumber(rotated_1);
         rotated_2 = getOriginalNumber(rotated_2);
-        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2] + computeP(coordinates, M, lambda1, lambda2, shift);
+        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2]
+               + computeP(coordinates, M, lambda1, lambda2, shift);
     }
 
 
@@ -101,20 +106,24 @@ public:
         M_prime[0][2] = computeScalarProduct(0,2,2,3,M,shift);
         M_prime[1][2] = computeScalarProduct(1,2,2,3,M,shift);
         M_prime[2][2] = computeScalarProduct(2,3,2,3,M,shift);
-        Matrix M_prime_;
+        Matrix M_prime_ ;/*{M_prime[0][0], M_prime[0][1], M_prime[0][2],
+            M_prime[1][0], M_prime[1][1], M_prime[1][2],
+            M_prime[2][0], M_prime[2][1], M_prime[2][2] };; */
         M_prime_ << M_prime[0][0], M_prime[0][1], M_prime[0][2],
                 M_prime[1][0], M_prime[1][1], M_prime[1][2],
-                M_prime[2][0], M_prime[2][1], M_prime[2][2];
-        VectorExt lambda;
-        lambda << lambda1, lambda2, 1 ;
-        Float computedP = std::sqrt(lambda.transpose() * M_prime_ * lambda);
+                M_prime[2][0], M_prime[2][1], M_prime[2][2] ;
+
+
+        VectorExt lambda ;//{lambda1, lambda2, 1};
+        lambda << lambda1, lambda2, 1;
+        Float computedP = std::sqrt(lambda.transpose() * ( M_prime_ * lambda ));
         return computedP;
     }
 
 
     __host__ __device__ static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
-                        Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
-                        Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
+                                            Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
+                                            Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
         Float a, b, c, d, e, f, g, h, k, a_hat, b_hat, c_hat, delta;
 
         a = phi2 * (alpha1 - alpha3) - phi1 * (beta1 - beta3);
@@ -219,7 +228,7 @@ public:
             return std::make_tuple(2,3);
         }
         else {
-            printf("wrong gray code %d\n", gray);
+            printf("wrong gray code double %d\n", gray);
             return std::make_tuple(0,0);
         }
     }
@@ -238,7 +247,7 @@ public:
             return 3;
         }
         else {
-            printf("wrong gray code %d\n", gray);
+            printf("wrong gray code single %d\n", gray);
             return 0;
         }
     }
