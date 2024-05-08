@@ -38,6 +38,16 @@ where $c$ represents the celerity of the wave.
 
 ## Description
 
+The project is a CUDA library designed for computing the Eikonal equation based on the FSM algorithm on 3D unstructured tetrahedrical meshes. It is designed to be highly extensible, and easy to integrate in different applications.<br>
+
+This repository contains a main component, `src`, which is a library for the computation of the numerical solution of the Eikonal equation described in the introduction paragraph. The library contains:
+- `Mesh` which is a class that represents a mesh in 3D.
+- `LocalSolver` which is a class responsable for the resolution of the local problem.
+- `Solver` which is the implementation of the CUDA solver.
+For more details, always refer to the documentation.
+
+ The repo also contains an utility component, `test`, which contains a test case and some input meshes.
+
 ## Usage
 After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, access the repo and run the following:
 ```bash
@@ -60,7 +70,26 @@ $ cd build
 $ cmake ..
 $ make
 ```
-An executable for each test will be created into `/build`, and can be executed through:
+An executable for the test will be created into `/build`, and can be executed through:
 ```bash
-$ ./test_name input-filename num-partitions output-filename
+$ ./test input-filename num-partitions output-filename
 ```
+
+where:
+- `input-filename` is the input file path where the mesh will be retrieved. The program only accepts file in vtk format.
+- `num-partitions` is the number of partitions dividing the domain.
+- `output-filename` is the name of the output file. The file will be located in the folder `test/meshes/output_meshes`.
+
+However, these are only examples. To fully exploit our library, it should be directly used in code to access further 
+features, such as the possibility to modify the velocity matrix and the boundary conditions (which in our example are 
+defaulted respectively to the identity matrix and the vertex nearest to the origin).
+
+We have already provided some meshes in the folder `test/meshes/input_meshes`.<br> 
+One example is:
+```bash
+$ ./triangulated ../test/meshes/input_meshes/cube-5.vtk 4 output-cube5
+```
+will execute the algorithm on the a cubic test model and will save the output into the file `output-cube5`.
+
+## Results
+Performance analysis and results can be found in the documentation.
