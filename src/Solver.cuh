@@ -102,9 +102,9 @@ public:
 
                     //std::cout<<"before kernel " << i << std::endl;
                     domainSweep<<<NUM_THREADS, numBlocks, 0, streams[i]>>>(i, partitions_vertices_dev, partitions_tetra_dev, geo_dev, tetra_dev,
-                                      shapes_dev, ngh_dev, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
-                                      mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
-
+                                                                           shapes_dev, ngh_dev, M_dev, solutions_dev, active_domains_dev, mesh->getPartitionsNumber(),
+                                                                           mesh->getNumberVertices(), mesh->getNumberTetra(), mesh->getShapes().size(), infinity_value, tol);
+                    cudaCheck("error cuda");
                 }
             }
             cudaDeviceSynchronize();
