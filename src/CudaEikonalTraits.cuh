@@ -8,10 +8,10 @@ struct CudaEikonalTraits {
     using VectorV = typename EikonalAlgebra::Vec<Float, D + 1>;
     using Matrix = typename EikonalAlgebra::Matrix<Float, D>;
     */
-    
+
     using VectorExt = typename Eigen::Matrix<Float, D, 1>;
     using VectorV = typename Eigen::Matrix<Float, D + 1, 1>;
     using Matrix = typename Eigen::Matrix<Float, D, D>;
-    
+
 };
 #endif

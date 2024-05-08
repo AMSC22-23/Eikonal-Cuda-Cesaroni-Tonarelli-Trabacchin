@@ -2,7 +2,6 @@
 #define EIKONAL_CUDA_CESARONI_TONARELLI_TRABACCHIN_LOCALSOLVER_CUH
 #include <cmath>
 #include <limits>
-#include <tuple>
 #include <cuda.h>
 #include "../src/CudaEikonalTraits.cuh"
 
@@ -17,7 +16,38 @@ class LocalSolver {
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
-     __host__ __device__ static auto solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
+    __host__ __device__ static Float solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
+
+        int lookup_vertices[9];
+        lookup_vertices[1] = 0;
+        lookup_vertices[2] = 1;
+        lookup_vertices[4] = 2;
+        lookup_vertices[8] = 3;
+
+        int lookup_edges_1[13];
+        lookup_edges_1[3] = 0;
+        lookup_edges_1[5] = 0;
+        lookup_edges_1[6] = 1;
+        lookup_edges_1[9] = 0;
+        lookup_edges_1[10] = 1;
+        lookup_edges_1[12] = 2;
+
+        int lookup_edges_2[13];
+        lookup_edges_2[3] = 1;
+        lookup_edges_2[5] = 2;
+        lookup_edges_2[6] = 2;
+        lookup_edges_2[9] = 3;
+        lookup_edges_2[10] = 3;
+        lookup_edges_2[12] = 3;
+
+
+
+
+
+
+
+
+
         Float lambda21;
         Float lambda22;
         Float lambda11;
@@ -25,24 +55,37 @@ public:
         Float lambda1;
         Float lambda2;
 
-        Float alpha1 = computeScalarProduct(0,2,0,2, M, shift);
-        Float alpha2 = computeScalarProduct(1,2,0,2, M, shift);
-        Float alpha3 = computeScalarProduct(2,3,0,2, M, shift);
+        Float alpha1 = computeScalarProductDiagonal(0,2,0,2, M, shift, lookup_edges_1, lookup_edges_2);
+        Float alpha2 = computeScalarProduct(1,2,0,2, M, shift, lookup_edges_1, lookup_edges_2);
+        Float alpha3 = computeScalarProduct(2,3,0,2, M, shift, lookup_edges_1, lookup_edges_2);
 
         Float beta1 = alpha2;
-        Float beta2 = computeScalarProduct(1,2,1,2,M, shift);
-        Float beta3 = computeScalarProduct(2,3,1,2,M, shift);
+        Float beta2 = computeScalarProductDiagonal(1,2,1,2,M, shift, lookup_edges_1, lookup_edges_2);
+        Float beta3 = computeScalarProduct(2,3,1,2,M, shift, lookup_edges_1, lookup_edges_2);
 
         Float gamma1 = alpha3;
         Float gamma2 = beta3;
-        Float gamma3 = computeScalarProduct(2,3,2,3,M, shift);
+        Float gamma3 = computeScalarProductDiagonal(2,3,2,3,M, shift, lookup_edges_1, lookup_edges_2);
+
+
+        Matrix M_prime;
+        M_prime << alpha1, beta1, gamma1,
+                alpha2, beta2, gamma2,
+                alpha3, beta3, gamma3;
+
+
+
 
         int phi31_gray_code = getGrayCode(0, 2);
         int phi32_gray_code = getGrayCode(1, 2);
-        auto [phi31_gray_code_rotated, phi31_gray_code_rotated_sign] = rotate(phi31_gray_code, shift);
-        auto [phi32_gray_code_rotated, phi32_gray_code_rotated_sign] = rotate(phi32_gray_code, shift);
-        auto [phi31_actual_index1, phi31_actual_index2] = getOriginalNumbers(phi31_gray_code_rotated);
-        auto [phi32_actual_index1, phi32_actual_index2] = getOriginalNumbers(phi32_gray_code_rotated);
+        int phi31_gray_code_rotated, phi31_gray_code_rotated_sign, phi32_gray_code_rotated, phi32_gray_code_rotated_sign;
+        rotate(phi31_gray_code, shift, &phi31_gray_code_rotated, &phi31_gray_code_rotated_sign);
+        rotate(phi32_gray_code, shift, &phi32_gray_code_rotated, &phi32_gray_code_rotated_sign);
+
+        int phi31_actual_index1 = lookup_edges_1[phi31_gray_code_rotated];
+        int phi31_actual_index2 = lookup_edges_2[phi31_gray_code_rotated];
+        int phi32_actual_index1 = lookup_edges_1[phi32_gray_code_rotated];
+        int phi32_actual_index2 = lookup_edges_2[phi32_gray_code_rotated];
 
         solve3D(phi31_gray_code_rotated_sign*(values[phi31_actual_index2] - values[phi31_actual_index1]), phi32_gray_code_rotated_sign*(values[phi32_actual_index2] - values[phi32_actual_index1]), alpha1, alpha2, alpha3, beta1, beta2, beta3, gamma1, gamma2, gamma3, &lambda11, &lambda21, &lambda12, &lambda22);
 
@@ -52,78 +95,85 @@ public:
         bool acceptable22 = !std::isnan(lambda22) && lambda22 > 0 && lambda22 < 1;
 
         //xy (lambda11, lambda21), (lambda12, lambda22)
-        Float phi4_1 = computeSolution3D(lambda11, lambda21, values, coordinates, M,  shift);
-        Float phi4_2 = computeSolution3D(lambda12, lambda22, values, coordinates, M,  shift);
+        Float phi4_1 = computeSolution3D(lambda11, lambda21, values, coordinates, M_prime,  shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
+        Float phi4_2 = computeSolution3D(lambda12, lambda22, values, coordinates, M_prime,  shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
         if(acceptable21 && acceptable11 && acceptable12 && acceptable22) {
-            if(phi4_1 < phi4_2) {
-                return std::make_tuple(phi4_1, lambda11, lambda21);
+            if(phi4_1 < phi4_2 && phi4_1 >= 0) {
+                return phi4_1;
             } else {
-                return std::make_tuple(phi4_2, lambda12, lambda22);
+                return phi4_2;
             }
-        } else if((!acceptable12 || !acceptable22) && acceptable21 && acceptable11) {
+        } else if((!acceptable12 || !acceptable22) && acceptable21 && acceptable11 && phi4_1 >=0) {
             lambda1 = lambda11;
             lambda2 = lambda21;
             //Float phi4 = phi4_1; //computeSolution3D(lambda1, lambda2, values, coordinates, M,  shift);
-            return std::make_tuple(phi4_1, lambda11, lambda21);
-        } else if(acceptable12 && acceptable22 && (!acceptable21 || !acceptable11)) {
+            return phi4_1;
+        } else if(acceptable12 && acceptable22 && (!acceptable21 || !acceptable11) && phi4_2 >=0) {
             lambda1 = lambda21;
             lambda2 = lambda22;
             //Float phi4 = computeSolution3D(lambda1, lambda2, values, coordinates, M,  shift);
-            return std::make_tuple(phi4_2, lambda21, lambda22);
+            return phi4_2;
         } else {
-            Float last_resort1 = computeSolution3D(1, 0, values, coordinates, M,  shift);
-            Float last_resort2 = computeSolution3D(0, 1, values, coordinates, M, shift);
-            if(last_resort1 < last_resort2) {
-                return std::make_tuple(last_resort1, 1.0, 0.0);
+            Float last_resort1 = computeSolution3D(1, 0, values, coordinates, M_prime,  shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
+            Float last_resort2 = computeSolution3D(0, 1, values, coordinates, M_prime, shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
+            if(last_resort1 < last_resort2 && last_resort1 >=0) {
+                return last_resort1;
             } else {
-                return std::make_tuple(last_resort2, 0.0, 1.0);
+                return last_resort2;
             }
         }
     }
 
 
-    __host__ __device__ static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, const Float* M, int shift) {
-        auto[rotated_0, sign_0_ignore] = rotate(getGrayCode(0), shift);
+    __host__ __device__ static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, const Matrix& M, int shift, int* lookup_vertices, int* lookup_edges_1, int* lookup_edges_2) {
+        int rotated_0;
+        int sign_0_ignore;
+        int rotated_1;
+        int sign_1_ignore;
+        int rotated_2;
+        int sign_2_ignore;
+        /*auto[rotated_0, sign_0_ignore] = rotate(getGrayCode(0), shift);
         auto[rotated_1, sign_1_ignore] = rotate(getGrayCode(1), shift);
-        auto[rotated_2, sign_2_ignore] = rotate(getGrayCode(2), shift);
-        rotated_0 = getOriginalNumber(rotated_0);
-        rotated_1 = getOriginalNumber(rotated_1);
-        rotated_2 = getOriginalNumber(rotated_2);
-        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2] 
-        + computeP(coordinates, M, lambda1, lambda2, shift);
+        auto[rotated_2, sign_2_ignore] = rotate(getGrayCode(2), shift);*/
+        rotate(getGrayCode(0), shift, &rotated_0, &sign_0_ignore);
+        rotate(getGrayCode(1), shift, &rotated_1, &sign_1_ignore);
+        rotate(getGrayCode(2), shift, &rotated_2, &sign_2_ignore);
+        rotated_0 = lookup_vertices[rotated_0];
+        rotated_1 = lookup_vertices[rotated_1];
+        rotated_2 = lookup_vertices[rotated_2];
+        return lambda1*values[rotated_0] + lambda2*values[rotated_1] + (1 - lambda1 - lambda2)*values[rotated_2]
+               + computeP(coordinates, M, lambda1, lambda2, shift, lookup_edges_1, lookup_edges_2);
     }
 
 
-    __host__ __device__ static Float computeP(VectorExt* coordinates, const Float* M, Float lambda1, Float lambda2, int shift) {
-        Float M_prime[3][3];
+    __host__ __device__ static Float computeP(VectorExt* coordinates, const Matrix& M, Float lambda1, Float lambda2, int shift, int* lookup_edges_1, int* lookup_edges_2) {
+        /*Float M_prime[3][3];
         //TODO consider improving the M_prime management
-        M_prime[0][0] = computeScalarProduct(0,2,0,2,M,shift);
-        M_prime[1][0] = computeScalarProduct(1,2,0,2,M,shift);
-        M_prime[2][0] = computeScalarProduct(2,3,0,2,M,shift);
-        M_prime[0][1] = computeScalarProduct(0,2,1,2,M,shift);
-        M_prime[1][1] = computeScalarProduct(1,2,1,2,M,shift);
-        M_prime[2][1] = computeScalarProduct(2,3,1,2,M,shift);
-        M_prime[0][2] = computeScalarProduct(0,2,2,3,M,shift);
-        M_prime[1][2] = computeScalarProduct(1,2,2,3,M,shift);
-        M_prime[2][2] = computeScalarProduct(2,3,2,3,M,shift);
-        Matrix M_prime_ ;/*{M_prime[0][0], M_prime[0][1], M_prime[0][2],
-            M_prime[1][0], M_prime[1][1], M_prime[1][2],
-            M_prime[2][0], M_prime[2][1], M_prime[2][2] };; */
+        M_prime[0][0] = computeScalarProductDiagonal(0,2,0,2,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[1][0] = computeScalarProduct(1,2,0,2,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[2][0] = computeScalarProduct(2,3,0,2,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[0][1] = M_prime[1][0];//computeScalarProduct(0,2,1,2,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[1][1] = computeScalarProductDiagonal(1,2,1,2,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[2][1] = computeScalarProduct(2,3,1,2,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[0][2] = M_prime[2][0];//computeScalarProduct(0,2,2,3,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[1][2] = M_prime[2][1];//computeScalarProduct(1,2,2,3,M,shift, lookup_edges_1, lookup_edges_2);
+        M_prime[2][2] = computeScalarProductDiagonal(2,3,2,3,M,shift, lookup_edges_1, lookup_edges_2);
+        Matrix M_prime_ ;
         M_prime_ << M_prime[0][0], M_prime[0][1], M_prime[0][2],
         M_prime[1][0], M_prime[1][1], M_prime[1][2],
-        M_prime[2][0], M_prime[2][1], M_prime[2][2] ;
-        
-        
+        M_prime[2][0], M_prime[2][1], M_prime[2][2] ;*/
+
+
         VectorExt lambda ;//{lambda1, lambda2, 1};
         lambda << lambda1, lambda2, 1;
-        Float computedP = std::sqrt(lambda.transpose() * ( M_prime_ * lambda ));
+        Float computedP = std::sqrt(lambda.transpose() * ( M * lambda ));
         return computedP;
     }
 
 
     __host__ __device__ static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
-                        Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
-                        Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
+                                            Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
+                                            Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
         Float a, b, c, d, e, f, g, h, k, a_hat, b_hat, c_hat, delta;
 
         a = phi2 * (alpha1 - alpha3) - phi1 * (beta1 - beta3);
@@ -174,29 +224,70 @@ public:
         }
     }
 
+    __host__ __device__ static bool check_gray(int gray, int & l1_new, int & l2_new) {
+        if(gray == 3 || gray == 5 || gray == 6 || gray == 9 || gray == 10 || gray==12) {
+            //printf("ok!!!\n");
+            return true;
+        }
+        else {
+            auto [l1, l2] = getOriginalNumbers(gray);
+            l1_new = l1;
+            l2_new = l2;
+            printf("wrong gray code %d %d\n", l1_new, l2_new);
+            return false;
+        }
+    }
 
-    __host__ __device__ static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift) {
+    __host__ __device__ static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift, int* lookup_edges_1, int* lookup_edges_2) {
         int k_gray = getGrayCode(k1, k2);
         int l_gray = getGrayCode(l1, l2);
-        auto [k_gray_rotated, sign1] = rotate(k_gray, shift);
-        auto [l_gray_rotated, sign2] = rotate(l_gray, shift);
+        int k_gray_rotated;
+        int sign1;
+        int l_gray_rotated;
+        int sign2;
+        //auto [k_gray_rotated, sign1] = rotate(k_gray, shift);
+        //auto [l_gray_rotated, sign2] = rotate(l_gray, shift);
+        rotate(k_gray, shift, &k_gray_rotated, &sign1);
+        rotate(l_gray, shift, &l_gray_rotated, &sign2);
         k_gray = k_gray_rotated;
         l_gray = l_gray_rotated;
-        auto [k1_new, k2_new] = getOriginalNumbers(k_gray);
-        auto [l1_new, l2_new] = getOriginalNumbers(l_gray);
-        k1 = k1_new;
+        //auto [k1_new, k2_new] = getOriginalNumbers(k_gray);
+        k1 = lookup_edges_1[k_gray];
+        k2 = lookup_edges_2[k_gray];
+        //auto [l1_new, l2_new] = getOriginalNumbers(l_gray);
+        l1 = lookup_edges_1[l_gray];
+        l2 = lookup_edges_2[l_gray];
+        //check_gray(l_gray, l1_new, l2_new);
+
+
+        /*k1 = k1_new;
         k2 = k2_new;
         l1 = l1_new;
-        l2 = l2_new;
+        l2 = l2_new;*/
 
-        if(k_gray != l_gray) {
-            int s_gray = k_gray ^ l_gray;
-            auto [s1, s2] = getOriginalNumbers(s_gray);
-            int sign = (2 * (s_gray > k_gray) - 1) * (2 * (s_gray > l_gray) - 1) * sign1 * sign2;
-            return sign * 0.5 * (M[getMIndex(k1, k2)] + M[getMIndex(l1, l2)] - M[getMIndex(s1, s2)]);
-        } else {
-            return ( (k1 < k2) ? (M[getMIndex(k1,k2)]) * sign1 : M[getMIndex(k2,k1)]) * sign1;
-        }
+        //if(k_gray != l_gray) {
+        int s_gray = k_gray ^ l_gray;
+        //auto [s1, s2] = getOriginalNumbers(s_gray);
+        int s1 = lookup_edges_1[s_gray];
+        int s2 = lookup_edges_2[s_gray];
+        int sign = (2 * (s_gray > k_gray) - 1) * (2 * (s_gray > l_gray) - 1) * sign1 * sign2;
+        return sign * 0.5 * (M[getMIndex(k1, k2)] + M[getMIndex(l1, l2)] - M[getMIndex(s1, s2)]);
+        //} else {
+        //return M[getMIndex(k1,k2)];
+        //}
+    }
+
+    __host__ __device__ static Float computeScalarProductDiagonal(int k1, int k2, int l1, int l2, const Float* M, int shift, int* lookup_edges_1, int* lookup_edges_2) {
+        int k_gray = getGrayCode(k1, k2);
+        int k_gray_rotated;
+        int sign1;
+        rotate(k_gray, shift, &k_gray_rotated, &sign1);
+        k_gray = k_gray_rotated;
+        k1 = lookup_edges_1[k_gray];
+        k2 = lookup_edges_2[k_gray];
+
+        return  M[getMIndex(k1,k2)];
+
     }
 
     __host__ __device__ static int getGrayCode(int k, int l) {
@@ -233,6 +324,7 @@ public:
         }
     }
 
+
     __host__ __device__ static auto getOriginalNumber(int gray) {
         if(gray == 1) {
             return 0;
@@ -252,23 +344,23 @@ public:
         }
     }
 
+
     //ok
     __host__ __device__ static int getMIndex(int s1, int s2) {
         return (1<<(s2-1)) - 1 + s1;
     }
 
     //return 0 if sign is +, -1 otherwise
-    __host__ __device__ static auto rotate(int k, int shift) {
-        if(shift == 0) {
-            return std::make_tuple(k, 1);
-        }
+    __host__ __device__ static void rotate(int k, int shift, int * result, int * sign) {
         int carry = (k << (4 - shift)) & 0x0000000F;
         k = (k >> shift) | carry;
         carry = carry - ((carry >> 1) & 0x55555555);
         carry = (carry & 0x33333333) + ((carry >> 2) & 0x33333333);
         int count = ((carry + (carry >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
         int mod = count & 1;
-        return std::make_tuple(k, mod == 0 ? 1 : -1);
+        *result = k;
+        *sign = (mod == 0 ? 1 : -1);
+        //return std::make_tuple(k, mod == 0 ? 1 : -1);
     }
 
 };
