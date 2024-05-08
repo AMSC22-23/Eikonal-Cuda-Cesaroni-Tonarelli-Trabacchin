@@ -48,17 +48,17 @@ template <typename Float>
 __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
                             const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict__ active_domains_dev,
                             int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value, Float tol){
-                                
+
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
-                                
+
     unsigned int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
     /*if(nodeIdDomain == 0) {
         printf("searching domain %d\n", domain_id);
     }*/
     unsigned int nodeIdGlobal = ((domain_id != 0) ? (partitions_vertices_dev[domain_id - 1]) : 0) + nodeIdDomain;
-    
+
     //std::array<VectorExt, 4> coordinates;
     VectorExt coordinates[4];
     VectorV values;
@@ -75,7 +75,7 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
                 values[j] = solutions_dev[tetra_dev[(D+1) * shapes_dev[i].tetra_index + j]];
             }
             M = M_dev + shapes_dev[i].tetra_index * 6;
-            auto [sol, lambda1, lambda2] = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-shapes_dev[i].tetra_config);
+            Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-shapes_dev[i].tetra_config);
             //printf("sol = %f\n", sol);
             if(sol < minimum_sol) {
                 minimum_sol = sol;
@@ -86,8 +86,8 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
             //printf("min sol: %f %f\n",minimum_sol,  solutions_dev[nodeIdGlobal]);
             atomicExch(&solutions_dev[nodeIdGlobal], minimum_sol);
             //solutions_dev[nodeIdGlobal] = minimum_sol;
-            
-            
+
+
             bool found = false;
             for (int i = ngh[nodeIdGlobal]; i < ((nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size); i++) { //for each tetra associated with the node
                 for (int j = 0; j < D + 1; j++) { //for each vertex in the tetra
@@ -99,6 +99,7 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
                             found = true;
                         }
                     }
+                    //active_domains_dev[tetra_dev[shapes_dev[i].tetra_index * (D + 1) + j] / (partitions_vertices_dev[0])] = 1;
                 }
             }
         }
