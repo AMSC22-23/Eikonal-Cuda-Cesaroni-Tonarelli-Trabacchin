@@ -176,15 +176,18 @@ public:
                                             Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
         Float a, b, c, d, e, f, g, h, k, a_hat, b_hat, c_hat, delta;
 
+        Float phi1_phi1 = phi1 * phi1;
+        Float alpha3_alpha3 = alpha3 * alpha3;
+
         a = phi2 * (alpha1 - alpha3) - phi1 * (beta1 - beta3);
         b = phi2 * (alpha2 - alpha3) - phi1 * (beta2 - beta3);
         c = phi2 * alpha3 - phi1 * beta3;
-        d = phi1 * phi1 * (alpha1 - alpha3 - gamma1 + gamma3) - (alpha1 * alpha1 + alpha3 * alpha3 - 2 * alpha1 * alpha3);
-        e = phi1 * phi1 * (beta2 - beta3 - gamma2 + gamma3) - (alpha2 * alpha2 + alpha3 * alpha3 - 2 * alpha2 * alpha3);
-        f = phi1* phi1 * (alpha2 - alpha3 + beta1 - beta3 - gamma1 - gamma2 + 2 * gamma3) - 2 * (alpha1 - alpha3) * (alpha2 - alpha3);
-        g = phi1 * phi1 * (alpha3 + gamma1 - 2 * gamma3) - (-2 * alpha3 * alpha3 + 2 * alpha1 * alpha3);
-        h = phi1 * phi1 * (beta3 + gamma2 - 2 * gamma3) - (2 * alpha2 * alpha3 - 2 * alpha3 * alpha3);
-        k = phi1* phi1 * gamma3 - alpha3 * alpha3;
+        d = phi1_phi1 * (alpha1 - alpha3 - gamma1 + gamma3) - (alpha1 * alpha1 + alpha3_alpha3 - 2 * alpha1 * alpha3);
+        e = phi1_phi1 * (beta2 - beta3 - gamma2 + gamma3) - (alpha2 * alpha2 + alpha3_alpha3 - 2 * alpha2 * alpha3);
+        f = phi1_phi1 * (alpha2 - alpha3 + beta1 - beta3 - gamma1 - gamma2 + 2 * gamma3) - 2 * (alpha1 - alpha3) * (alpha2 - alpha3);
+        g = phi1_phi1 * (alpha3 + gamma1 - 2 * gamma3) - (-2 * alpha3_alpha3 + 2 * alpha1 * alpha3);
+        h = phi1_phi1 * (beta3 + gamma2 - 2 * gamma3) - (2 * alpha2 * alpha3 - 2 * alpha3_alpha3);
+        k = phi1_phi1 * gamma3 - alpha3_alpha3;
 
         a_hat = d * b * b / (a * a) + e - f * b / a;
         b_hat = 2 * b * c * d / (a * a) - f * c / a - b * g / a + h;
