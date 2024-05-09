@@ -28,9 +28,6 @@ public:
         }
     }
 
-
-
-
     void gpuDataTransfer(){
         //printf("GPU data transfer started\n");
         // Allocate memory in device
