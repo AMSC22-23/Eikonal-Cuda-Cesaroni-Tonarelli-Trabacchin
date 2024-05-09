@@ -49,7 +49,8 @@ For more details, always refer to the documentation.
  The repo also contains an utility component, `test`, which contains a test case and some input meshes.
 
 ## Usage
-After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, access the repo and run the following:
+After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, 
+the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, access the repo and run the following:
 ```bash
 $ mkdir lib
 $ cd lib
@@ -89,7 +90,7 @@ One example is:
 ```bash
 $ ./triangulated ../test/meshes/input_meshes/cube-5.vtk 4 output-cube5
 ```
-will execute the algorithm on the a cubic test model and will save the output into the file `output-cube5`.
+will execute the algorithm on a cubic test model and will save the output into the file `output-cube5`.
 
 ## Results
 Performance analysis and results can be found in the documentation.
