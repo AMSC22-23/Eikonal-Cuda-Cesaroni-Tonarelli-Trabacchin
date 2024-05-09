@@ -50,10 +50,11 @@ For more details, always refer to the documentation.
 
 ## Usage
 After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, 
-the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software is required. To install it, access the repo and run the following:
+the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software and of Thrust CUDA parallel library is required. To install them, access the repo and run the following:
 ```bash
 $ mkdir lib
 $ cd lib
+$ git clone --recursive https://github.com/NVIDIA/thrust.git
 $ git clone https://github.com/KarypisLab/GKlib.git
 $ make config
 $ make
