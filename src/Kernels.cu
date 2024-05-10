@@ -10,6 +10,7 @@
 #include "Mesh.cuh"
 #include "LocalSolver.cuh"
 #include "CudaEikonalTraits.cuh"
+#include <cmath>
 constexpr int D = 3;
 /*
 using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
@@ -17,7 +18,53 @@ using Matrix = typename Eikonal::Eikonal_traits<D,2>::AnisotropyM;
 using VectorV = typename Eigen::Matrix<double,4,1>;
 */
 
+template <typename Float>
+__device__ void atomicSwapIfLess(Float* address, Float value) {
+    Float swap, old;
+    swap = *address;
 
+
+    do {
+        if(swap <= value) {
+            break;
+        }
+        old = swap;
+
+    }while((swap = atomicCAS(address, swap, value)) != old);
+
+}
+
+template <>
+__device__ void atomicSwapIfLess(float* address, float value) {
+    float swap, old;
+    swap = *address;
+
+
+    do {
+        if(swap <= value) {
+            break;
+        }
+        old = swap;
+
+    }while((swap = atomicCAS((unsigned int*)address, (unsigned int)swap, (unsigned int)value)) != old);
+
+}
+
+template <>
+__device__ void atomicSwapIfLess(double* address, double value) {
+    double swap, old;
+    swap = *address;
+
+
+    do {
+        if(swap <= value) {
+            break;
+        }
+        old = swap;
+
+    }while((swap = atomicCAS((unsigned long long int*)address, (unsigned long long int)swap, (unsigned long long int)value)) != old);
+
+}
 
 
 template <typename Float>
@@ -34,6 +81,9 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
     if(threadId < size_sources) {
 
         solutions_dev[source_nodes_dev[threadId]] = 0.0;
+        if(source_nodes_dev[threadId]==131) {
+            printf("source found and set\n");
+        }
         bool found = false;
         for(int i = 0; i < partitions_number && !found; i++) {
             if (source_nodes_dev[threadId] <= partitions_vertices_dev[i]) {
@@ -45,9 +95,9 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
 }
 
 template <typename Float>
-__global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
-                            const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict__ active_domains_dev,
-                            int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value, Float tol){
+__global__ void domainSweep1(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
+                             const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict__ active_domains_dev,
+                             int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value, Float tol){
 
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
@@ -106,5 +156,182 @@ __global__ void domainSweep(int domain_id, const int*  __restrict__ partitions_v
     }
 
 }
+
+//requires size < total number of vertices in mesh
+//requires tid + domain_begin < total number of vertices in mesh
+//length(map) == length(output)
+//requires map being the exclusive scan of a boolean array predicate
+//reqquires max(map) < lenght(output) : ok, map is non-decreasing and the max value is in the last position. At most its value is equals to length(map) == length(output)
+//requires doesn't exist i,j such that map[i] == map[j] && predicate[i] == predicate[j] == 1 : ok, suppose (without loss of generality) that  i < j, then map[i] = a and map[j] = b + predicate[i] + a
+//requires map containing all and only numbers from 0 to max(map), satisfied as map is non-decreasing and the max difference between map[i+1] and map[i] is 1.
+//ensures that 1) if predicate[i] == 1 than exists j such that output[j] == i + domain_begin 2)if map[i] is written to, then for each 0 <= j < i are also written to. (satisfied)
+//ok, as if predicate[i] == 1 then output[map[j]] is assigned to i + domain_begin. Moreover, if predicate[k] == 1 than map[k] != map[j]
+
+__global__ void compact(int* map, int* predicate, size_t size, int* output, int domain_begin) {
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if(tid < size) {
+        if(predicate[tid] == 1) {
+            output[map[tid]] = tid + domain_begin;
+        }
+    }
+
+}
+
+
+//requires length(result) < active_nodes
+//requires length(ngh) >= shapes_size
+//requires cList being output of compact kernel
+//active nodes < num_vertices, ok
+//requires cList[i] < active_nodes, ok (see requires compact kernel)
+//requires : given shapes an array so that if ngh[i] = a and ngh[i+1] = b then from shapes[a](inclusive) to shapes[b](exclusive) are tetrahedra near vertex i. If i+1 >= len(ngh) then ngh[i+1] is assumed to be shapes_size
+//ensures result[tid] contains the number of tetrahedra near to cList[tid]. ok, result[tid] = ngh[cList[tid] + 1] - ngh[cList[tid]] which is the number of tetrahedra near to cList[tid] (see requiere)
+__global__ void count_Nbhs(int* cList, int* ngh, int* result, size_t active_nodes, size_t num_vertices, size_t shapes_size) {
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < active_nodes) {
+        int temp = cList[tid];
+        result[tid] = ((temp != num_vertices - 1) ? ngh[temp+1]: shapes_size) - ngh[temp];
+    }
+}
+
+/*__global__ void count_Nbhs_vertices(int* cList, int* ngh, int* tetra, int* result, size_t active_nodes, size_t num_vertices, size_t shapes_size) {
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < active_nodes) {
+        int temp = cList[tid];
+
+    }
+}*/
+
+//requires cList being an array of vertices indexes, with length up to active_nodes
+//requires nbhNr being the array st nbhNr[i] == number of near tetrahedra to cList[i], with length up to len(cList)
+//requires sAd to satisfy the same properties as map in kernel compact, plus len(sAd) < active_nodes
+//requires len(shapes) at least max(ngh[cList[tid]] + nbhNr[tid]), ok
+
+//ensures elemListSize == max(sAd[tid] + nbhNr[tid] - 1) + 1, with tid < active_nodes. satisfied as the maximum is achived for tid == active_nodes - 1
+//ensures if sAd[tid] = k then elemList from sAd[tid](inclusive) to sAd[tid] + nbhNr[tid] (exclusive) is filled with only and all cList[tid] neighbours
+__global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* elemList, size_t active_nodes, size_t* elemListSize, int* ngh_dev, TetraConfig* shapes_dev) {
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    *elemListSize = nbhNr[active_nodes - 1] + sAd[active_nodes - 1];
+    if(tid < active_nodes) {
+        int begin = ngh_dev[cList[tid]];
+        int end = begin + nbhNr[tid];
+        for(int i = begin; i < end; i++) {
+            elemList[sAd[tid] + i - begin] = shapes_dev[i];// fix from elemList[sAd[tid]] = shapes[i];
+        }
+    }
+}
+
+template <int D, typename Float>
+__global__ void construct_predicate(TetraConfig* elemList, size_t* elemListSize, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin) {
+
+    using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
+    using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
+    using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
+
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < *elemListSize) {
+        VectorExt coordinates[4];
+        VectorV values;
+        TetraConfig tetra = elemList[tid];
+        for(int j = 0; j < D + 1; j++){
+            for(int k = 0; k < D; k++) {
+                coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * tetra.tetra_index + j] + k];
+            }
+            values[j] = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + j]];
+        }
+
+        const Float* M;
+        M = M_dev + tetra.tetra_index * 6;
+        Float old_sol = solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]];
+        Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-tetra.tetra_config);
+        if(old_sol > sol) {
+            // solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = sol; //atomic may be needed
+            atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], sol);
+        }
+        int pred = std::abs(old_sol - sol) < tol * (1 + 0.5 * (sol + old_sol));
+        //predicate[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = std::abs(old_sol - sol) < tol * (1 + 0.5 * (sol + old_sol));
+        //atomicCAS(&predicate[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], 0, pred);
+        if(pred == 1) {
+            for(int j = 0; j < D + 1; j++) {
+                if(j != tetra.tetra_config - 1) {
+                    predicate[tetra_dev[(D+1) * tetra.tetra_index + j]] = 1;
+                } else {
+                    active_list_dev[tetra_dev[(D+1) * tetra.tetra_index + j] - domain_begin] = 0;
+                    //printf("vertex %d removed\n", tetra_dev[(D+1) * tetra.tetra_index + j]);
+                    //printf("vertex removed\n");
+                }
+            }
+        }
+    }
+}
+
+//requires length(active_list) == predicate_size
+//requires length(predicate) == predicate_size
+//ensures if predicate[tid] ==1 then acive_list[tid] == 0, with tid < predicate_size
+__global__ void removeConvergedNodes(int* active_list, int* predicate, size_t predicate_size) {
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < predicate_size) {
+        if(predicate[tid] == 1) {
+            active_list[tid] = 0;
+        }
+    }
+}
+
+
+//requires length(elemList) == elemSize
+
+template <int D, typename Float>
+__global__ void domainSweep(TetraConfig* elemList, size_t* elemListSize, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_domains_dev, int* partitions_vertices_dev, int domain_number, int begin_domain) {
+
+    using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
+    using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
+    using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
+
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < *elemListSize) {
+        VectorExt coordinates[4];
+        VectorV values;
+        TetraConfig tetra = elemList[tid];
+        for(int j = 0; j < D + 1; j++){
+            for(int k = 0; k < D; k++) {
+                coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * tetra.tetra_index + j] + k];
+            }
+            values[j] = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + j]];
+        }
+
+        const Float* M;
+        M = M_dev + tetra.tetra_index * 6;
+        Float old_sol = solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]];
+        Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-tetra.tetra_config);
+        if(old_sol > sol) {
+            //printf("updating solution of %d to %f\n", tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1], sol);
+            solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = sol; //atomic may be needed
+            //atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], sol);
+            predicate[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - begin_domain] = 1;
+            //printf("set %d to 1\n", tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]);
+            //active_domains_dev[tetra_dev[shapes_dev[i].tetra_index * (D + 1) + j] / (partitions_vertices_dev[0])] = 1;
+
+        }
+
+    }
+}
+
+__global__ void propagatePredicate(int* active_list_dev, int domain_size, int begin_domain, int* predicate) {
+    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < domain_size) {
+        active_list_dev[tid] |= predicate[begin_domain + tid];
+        predicate[begin_domain + tid] = 0;
+    }
+}
+
+template <typename Float>
+__global__ void activeListPrint(int* active_list, Float* solutions, int begin_domain, int size) {
+    for(int i = 0; i < size; i++) {
+        printf("%d (%f) ", active_list[i] + begin_domain, solutions[begin_domain + i]);
+    }
+    printf("\n");
+}
+
+
 
 #endif
