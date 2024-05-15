@@ -116,7 +116,12 @@ public:
         } else {
             Float last_resort1 = computeSolution3D(1, 0, values, coordinates, M_prime,  shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
             Float last_resort2 = computeSolution3D(0, 1, values, coordinates, M_prime, shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
-            if(last_resort1 < last_resort2 && last_resort1 >=0) {
+            Float last_resort3 = computeSolution3D(0, 0, values, coordinates, M_prime, shift, lookup_vertices, lookup_edges_1, lookup_edges_2);
+
+            if(last_resort3 < last_resort1 && last_resort3 < last_resort2 && last_resort3 >=0) {
+                 return last_resort3;
+            }
+            else if(last_resort1 < last_resort2 && last_resort1 >=0) {
                 return last_resort1;
             } else {
                 return last_resort2;

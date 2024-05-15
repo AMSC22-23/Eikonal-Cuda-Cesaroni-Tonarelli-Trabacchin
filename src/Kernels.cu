@@ -1,7 +1,7 @@
 #ifndef KERNELS
 #define KERNELS
 #include <vector>
-#include <cuda_runtime.h>
+#include <cuda.h>
 #include <random>
 #include <set>
 #include <array>
@@ -19,7 +19,7 @@ using VectorV = typename Eigen::Matrix<double,4,1>;
 */
 
 template <typename Float>
-__device__ void atomicSwapIfLess(Float* address, Float value) {
+__device__ Float atomicSwapIfLess(Float* address, Float value) {
     Float swap, old;
     swap = *address;
 
@@ -31,11 +31,12 @@ __device__ void atomicSwapIfLess(Float* address, Float value) {
         old = swap;
 
     }while((swap = atomicCAS(address, swap, value)) != old);
+    return swap;
 
 }
 
 template <>
-__device__ void atomicSwapIfLess(float* address, float value) {
+__device__ float atomicSwapIfLess(float* address, float value) {
     float swap, old;
     swap = *address;
 
@@ -46,12 +47,13 @@ __device__ void atomicSwapIfLess(float* address, float value) {
         }
         old = swap;
 
-    }while((swap = atomicCAS((unsigned int*)address, (unsigned int)swap, (unsigned int)value)) != old);
+    }while((swap = __uint_as_float(atomicCAS((unsigned int*)address, __float_as_uint(swap), __float_as_uint(value)))) != old);
+    return swap;
 
 }
 
 template <>
-__device__ void atomicSwapIfLess(double* address, double value) {
+__device__ double atomicSwapIfLess(double* address, double value) {
     double swap, old;
     swap = *address;
 
@@ -62,7 +64,8 @@ __device__ void atomicSwapIfLess(double* address, double value) {
         }
         old = swap;
 
-    }while((swap = atomicCAS((unsigned long long int*)address, (unsigned long long int)swap, (unsigned long long int)value)) != old);
+    }while((swap = __longlong_as_double(atomicCAS((unsigned long long int*)address, __double_as_longlong(swap), __double_as_longlong(value)))) != old);
+    return swap;
 
 }
 
@@ -81,9 +84,6 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
     if(threadId < size_sources) {
 
         solutions_dev[source_nodes_dev[threadId]] = 0.0;
-        if(source_nodes_dev[threadId]==131) {
-            printf("source found and set\n");
-        }
         bool found = false;
         for(int i = 0; i < partitions_number && !found; i++) {
             if (source_nodes_dev[threadId] <= partitions_vertices_dev[i]) {
@@ -94,68 +94,7 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
     }
 }
 
-template <typename Float>
-__global__ void domainSweep1(int domain_id, const int*  __restrict__ partitions_vertices_dev, int* __restrict__ partitions_tetra_dev, Float* __restrict__ geo_dev, const int* __restrict__ tetra_dev,
-                             const TetraConfig* __restrict__ shapes_dev, const int* __restrict__ ngh, const Float* __restrict__ M_dev, Float* __restrict__ solutions_dev, int* __restrict__ active_domains_dev,
-                             int num_partitions, int num_vertices, int num_tetra, int shapes_size, Float infinity_value, Float tol){
 
-    using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
-    using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
-    using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
-
-    unsigned int nodeIdDomain = threadIdx.x + blockIdx.x * blockDim.x;
-    /*if(nodeIdDomain == 0) {
-        printf("searching domain %d\n", domain_id);
-    }*/
-    unsigned int nodeIdGlobal = ((domain_id != 0) ? (partitions_vertices_dev[domain_id - 1]) : 0) + nodeIdDomain;
-
-    //std::array<VectorExt, 4> coordinates;
-    VectorExt coordinates[4];
-    VectorV values;
-    const Float* M;
-    Float minimum_sol = infinity_value;
-    // each thread takes a node and compute the solution looping over all its associated tetrahedra
-    if (nodeIdGlobal < num_vertices){
-        for(int i = ngh[nodeIdGlobal]; i < ((nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size); i++){
-            // call local solver on tetra[shapes_dev[i].tetra_index] using configuration shapes_dev[i].tetra_config
-            for(int j = 0; j < D + 1; j++){
-                for(int k = 0; k < D; k++) {
-                    coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * shapes_dev[i].tetra_index + j] + k];
-                }
-                values[j] = solutions_dev[tetra_dev[(D+1) * shapes_dev[i].tetra_index + j]];
-            }
-            M = M_dev + shapes_dev[i].tetra_index * 6;
-            Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-shapes_dev[i].tetra_config);
-            //printf("sol = %f\n", sol);
-            if(sol < minimum_sol) {
-                minimum_sol = sol;
-            }
-        }
-
-        if(-minimum_sol + solutions_dev[nodeIdGlobal] > tol) {
-            //printf("min sol: %f %f\n",minimum_sol,  solutions_dev[nodeIdGlobal]);
-            atomicExch(&solutions_dev[nodeIdGlobal], minimum_sol);
-            //solutions_dev[nodeIdGlobal] = minimum_sol;
-
-
-            bool found = false;
-            for (int i = ngh[nodeIdGlobal]; i < ((nodeIdGlobal != num_vertices - 1) ? ngh[nodeIdGlobal+1]: shapes_size); i++) { //for each tetra associated with the node
-                for (int j = 0; j < D + 1; j++) { //for each vertex in the tetra
-                    found = false;
-                    for (int k = 0; k < num_partitions && !found; k++) { // activate the domains associated with the vertices
-                        if (tetra_dev[shapes_dev[i].tetra_index * (D + 1) + j] <= partitions_vertices_dev[k]) {
-                            int old_active = atomicExch(&active_domains_dev[k], 1);
-                            //active_domains_dev[k] = 1;
-                            found = true;
-                        }
-                    }
-                    //active_domains_dev[tetra_dev[shapes_dev[i].tetra_index * (D + 1) + j] / (partitions_vertices_dev[0])] = 1;
-                }
-            }
-        }
-    }
-
-}
 
 //requires size < total number of vertices in mesh
 //requires tid + domain_begin < total number of vertices in mesh
@@ -211,28 +150,54 @@ __global__ void count_Nbhs(int* cList, int* ngh, int* result, size_t active_node
 //ensures if sAd[tid] = k then elemList from sAd[tid](inclusive) to sAd[tid] + nbhNr[tid] (exclusive) is filled with only and all cList[tid] neighbours
 __global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* elemList, size_t active_nodes, size_t* elemListSize, int* ngh_dev, TetraConfig* shapes_dev) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    *elemListSize = nbhNr[active_nodes - 1] + sAd[active_nodes - 1];
+    if(tid == 0) {
+        //printf("active nodes %d %p %p %p %p %p\n", active_nodes , &sAd[0], &nbhNr[active_nodes - 1], &cList[tid], &ngh_dev[cList[tid]], &nbhNr[tid]);
+
+        *elemListSize = 
+        sAd[active_nodes - 1] + 
+        nbhNr[active_nodes - 1];
+        
+    }
     if(tid < active_nodes) {
         int begin = ngh_dev[cList[tid]];
-        int end = begin + nbhNr[tid];
+        int end = begin + nbhNr[tid]; 
         for(int i = begin; i < end; i++) {
-            elemList[sAd[tid] + i - begin] = shapes_dev[i];// fix from elemList[sAd[tid]] = shapes[i];
+            elemList[sAd[tid] + i - begin] = shapes_dev[i];
         }
     }
 }
 
+
+
+//number of blocks is assumed to be precise
 template <int D, typename Float>
-__global__ void construct_predicate(TetraConfig* elemList, size_t* elemListSize, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin) {
+__global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin, int domain_size) {
 
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
 
-    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if(tid < *elemListSize) {
-        VectorExt coordinates[4];
-        VectorV values;
-        TetraConfig tetra = elemList[tid];
+    int sAddr_index = blockIdx.x;
+    int elemList_index = sAddr[sAddr_index] + threadIdx.x;
+    int upper_bound = ((sAddr_index != active_nodes - 1) ? sAddr[sAddr_index + 1] : (int)*elemListSize);
+    __shared__ Float shared_sol;
+    Float old_sol;
+    //int old_active_status;
+    VectorExt coordinates[4];
+    VectorV values;
+    TetraConfig tetra;
+    if(elemList_index < upper_bound) {
+
+        tetra = elemList[elemList_index];
+        old_sol = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1]];
+        //old_active_status = active_list_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1] - domain_begin];
+        if(threadIdx.x == 0) {
+            shared_sol = old_sol;
+        }
+    }
+    __syncthreads();
+    if(elemList_index < upper_bound) {
+
         for(int j = 0; j < D + 1; j++){
             for(int k = 0; k < D; k++) {
                 coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * tetra.tetra_index + j] + k];
@@ -242,56 +207,89 @@ __global__ void construct_predicate(TetraConfig* elemList, size_t* elemListSize,
 
         const Float* M;
         M = M_dev + tetra.tetra_index * 6;
-        Float old_sol = solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]];
         Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-tetra.tetra_config);
-        if(old_sol > sol) {
-            // solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = sol; //atomic may be needed
-            atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], sol);
-        }
-        int pred = std::abs(old_sol - sol) < tol * (1 + 0.5 * (sol + old_sol));
-        //predicate[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = std::abs(old_sol - sol) < tol * (1 + 0.5 * (sol + old_sol));
-        //atomicCAS(&predicate[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], 0, pred);
+        /*if(tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1] == 39) {
+            printf("solution found for 39 : %f tetra_index : %d, %d %d \n", shared_sol, tetra.tetra_index, elemList_index, upper_bound);
+        }*/
+        atomicSwapIfLess<Float>(&shared_sol, sol);        
+    }
+    __syncthreads();
+
+    if(elemList_index < upper_bound) {
+
+        int pred = std::abs(old_sol - shared_sol) < tol * (1 + 0.5 * (shared_sol + old_sol));
         if(pred == 1) {
             for(int j = 0; j < D + 1; j++) {
                 if(j != tetra.tetra_config - 1) {
-                    predicate[tetra_dev[(D+1) * tetra.tetra_index + j]] = 1;
-                } else {
-                    active_list_dev[tetra_dev[(D+1) * tetra.tetra_index + j] - domain_begin] = 0;
-                    //printf("vertex %d removed\n", tetra_dev[(D+1) * tetra.tetra_index + j]);
-                    //printf("vertex removed\n");
+                    if(solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + j]] - shared_sol > 0) {
+                        predicate[tetra_dev[(D+1) * tetra.tetra_index + j]] = 1;
+                        //printf("vertex %d added to predicate\n", tetra_dev[(D+1) * tetra.tetra_index + j]);
+                    }
                 }
             }
+        
+            if(threadIdx.x == 0) {
+                active_list_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1] - domain_begin] = 2;
+            }
+        
+            
         }
+
+
+        if(threadIdx.x == 0) {
+            atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
+
+        }
+
+        
+        
+       
     }
+
+
+
 }
+
 
 //requires length(active_list) == predicate_size
 //requires length(predicate) == predicate_size
 //ensures if predicate[tid] ==1 then acive_list[tid] == 0, with tid < predicate_size
-__global__ void removeConvergedNodes(int* active_list, int* predicate, size_t predicate_size) {
+__global__ void removeConvergedNodes(int* active_list, int size) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if(tid < predicate_size) {
-        if(predicate[tid] == 1) {
+    if(tid < size) {
+        if(active_list[tid] == 2) {
             active_list[tid] = 0;
         }
     }
+
 }
 
 
-//requires length(elemList) == elemSize
-
 template <int D, typename Float>
-__global__ void domainSweep(TetraConfig* elemList, size_t* elemListSize, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_domains_dev, int* partitions_vertices_dev, int domain_number, int begin_domain) {
+__global__ void domain_Sweep_shared_memory(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* active_list, Float* M_dev, Float tol, int domain_begin) {
 
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
 
-    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if(tid < *elemListSize) {
-        VectorExt coordinates[4];
-        VectorV values;
-        TetraConfig tetra = elemList[tid];
+
+    int sAddr_index = blockIdx.x;
+    int elemList_index = sAddr[sAddr_index] + threadIdx.x;
+    int upper_bound = ((sAddr_index != active_nodes - 1) ? sAddr[sAddr_index + 1] : (int)*elemListSize);
+    __shared__ Float shared_sol;
+    Float old_sol;
+    VectorExt coordinates[4];
+    VectorV values;
+    TetraConfig tetra;
+    if(elemList_index < upper_bound) {
+        tetra = elemList[elemList_index];
+        old_sol = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1]];
+        if(threadIdx.x == 0) {
+            shared_sol = old_sol;
+        }
+    }
+    __syncthreads();
+    if(elemList_index < upper_bound && active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] == 0) {
         for(int j = 0; j < D + 1; j++){
             for(int k = 0; k < D; k++) {
                 coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * tetra.tetra_index + j] + k];
@@ -301,25 +299,32 @@ __global__ void domainSweep(TetraConfig* elemList, size_t* elemListSize, int* te
 
         const Float* M;
         M = M_dev + tetra.tetra_index * 6;
-        Float old_sol = solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]];
         Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-tetra.tetra_config);
-        if(old_sol > sol) {
-            //printf("updating solution of %d to %f\n", tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1], sol);
-            solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = sol; //atomic may be needed
-            //atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], sol);
-            predicate[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - begin_domain] = 1;
-            //printf("set %d to 1\n", tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]);
-            //active_domains_dev[tetra_dev[shapes_dev[i].tetra_index * (D + 1) + j] / (partitions_vertices_dev[0])] = 1;
+        atomicSwapIfLess<Float>(&shared_sol, sol);        
+    }
+    __syncthreads();
 
+    if(elemList_index < upper_bound) {
+        
+        if(threadIdx.x == 0) {
+            if(shared_sol < old_sol) {
+                atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
+                active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] = 1;
+            }
         }
-
     }
 }
 
 __global__ void propagatePredicate(int* active_list_dev, int domain_size, int begin_domain, int* predicate) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if(tid < domain_size) {
-        active_list_dev[tid] |= predicate[begin_domain + tid];
+        //if(active_list_dev[tid] != 2) {
+            if(predicate[begin_domain + tid] == 1) {
+                active_list_dev[tid] = 1;
+                //printf("added node %d \n", tid + begin_domain);
+            }
+            //active_list_dev[tid] |= predicate[begin_domain + tid];
+        //}
         predicate[begin_domain + tid] = 0;
     }
 }
@@ -327,11 +332,35 @@ __global__ void propagatePredicate(int* active_list_dev, int domain_size, int be
 template <typename Float>
 __global__ void activeListPrint(int* active_list, Float* solutions, int begin_domain, int size) {
     for(int i = 0; i < size; i++) {
-        printf("%d (%f) ", active_list[i] + begin_domain, solutions[begin_domain + i]);
+        printf("%d (%f) ", active_list[i], solutions[active_list[i]]);
     }
     printf("\n");
 }
 
+__global__ void elemListPrint(TetraConfig* elem_list, int* tetra_dev, size_t* size) {
+    for(int i = 0; i < *size; i++) {
+        printf("(%d %d %d %d)\n", tetra_dev[4*elem_list[i].tetra_index + 0], tetra_dev[4*elem_list[i].tetra_index + 1], tetra_dev[4*elem_list[i].tetra_index + 2], tetra_dev[4*elem_list[i].tetra_index + 3]);
+    }
+    printf("\n");
+}
+
+
+__global__ void checkZero(int* begin, int* end) {
+    while(begin!=end) {
+        if(*begin != 0) {
+            printf("error %d\n", *begin);
+        }
+        begin++;
+    }
+}
+
+__global__ void active_print(int* list, int size) {
+    for(int i = 0; i < size; i++) {
+        if(list[i] == 1) {
+            //printf("active lists contains %d\n", i);
+        }
+    }
+}
 
 
 #endif

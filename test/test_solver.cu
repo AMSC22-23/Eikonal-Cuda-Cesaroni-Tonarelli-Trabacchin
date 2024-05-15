@@ -14,10 +14,9 @@ int main(int argc, char* argv[]){
     using VectorV = typename CudaEikonalTraits<float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<float, D>::Matrix;
 
-    const double infinity_value = 2000;
+    const double infinity_value = 1000000;
     if(argc == 4)
     {
-        std::cout << "Start main..." << std::endl;
         // Retrieve parameters
         std::string input_fileName = argv[1];
         int num_parts = std::atoi(argv[2]);
@@ -34,24 +33,20 @@ int main(int argc, char* argv[]){
 
 
         // Instantiating mesh
-        std::cout << "creating mesh" << std::endl;
         Mesh<D,float> mesh(input_fileName, num_parts, M);
-        std::cout << "Created mesh..." << std::endl;
         // Setting boundary
         std::vector<int> boundary;
         boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 0, 0})));
-        // boundary.push_back(mesh.getNearestVertex(std::array<double, D>({1, 1, 1})));
-        std::cout << "Boundary set..." << std::endl;
+
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 1, 1})));
 
         // Instantiating Eikonal Solver
         Solver<D,float> solver(&mesh);
-        std::cout << "Initialised solver..." << std::endl;
 
         // Solve
         auto start1 = std::chrono::high_resolution_clock::now();
         solver.solve(boundary, tol, infinity_value, fileName);
         auto stop1 = std::chrono::high_resolution_clock::now();
-        std::cout << "solved..." << std::endl;
 
 
         // Performance Result Table
@@ -62,7 +57,7 @@ int main(int argc, char* argv[]){
         std::cout << std::endl;
         std::cout << "Execution time = " <<
                   std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
-        std::cout << "Output can be found in ../test/output_meshes" << std::endl <<
+        std::cout << "Output can be found in ../test/meshes/output_meshes" << std::endl <<
                   "with name: " << output_fileName << ".vtk" << std::endl;
         std::cout << "===============================================" << std::endl;
     }
