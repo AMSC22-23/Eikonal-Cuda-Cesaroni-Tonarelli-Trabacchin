@@ -33,7 +33,6 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts, const std::string& matrix_file_path) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
-        std::cout << "init_mesh completed" << std::endl;
         tetra.resize(sets.size() * (D+1));
         int i = 0;
         for(auto &t : sets) {
@@ -65,7 +64,6 @@ public:
         }
         cont += g[ngh.size()-1].size();
         shapes.resize(cont);
-        std::cout << "actual shapes size " << cont << std::endl;
         cont = 0;
 
         for(i = 0; i < g.size(); i++) {
@@ -81,7 +79,6 @@ public:
             }
         }
 
-        std::cout << "after shapes size " << cont << std::endl;
 
 
         /*
@@ -103,7 +100,6 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
-        std::cout << "init_mesh completed" << std::endl;
         tetra.resize(sets.size() * (D+1));
         unsigned int i = 0;
         for(auto &t : sets) {
@@ -117,11 +113,34 @@ public:
 
         std::vector<Matrix> tempM;
         tempM.resize(tetra.size()/(D+1));
+        int cont_modified_tetra = 0;
+
+
+
         for(i = 0; i < tetra.size() / (D + 1); i++){
             tempM[i] = velocity;
+            /*test only*/
+
+            int v1 = tetra[(D+1) * i];
+            Float v1_x = geo[D*v1];
+            Float v1_y = geo[D*v1 + 1];
+            Float v1_z = geo[D*v1 + 2];
+
+            //if(i / ((tetra.size()/(2*(D+1)))) == 0) {
+            if(v1_x + v1_y + v1_z >= 1.5) {
+                tempM[i] = 4.0 * velocity;
+                cont_modified_tetra++;
+            }
+
+
+
+
+
+            /*test only*/
+
         }
-        std::cout<<"tetra" << std::endl;
         execute_metis(tempM);
+
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -140,9 +159,9 @@ public:
         }
         cont += g[ngh.size()-1].size();
         shapes.resize(cont);
-        std::cout << "actual shapes size " << cont << std::endl;
 
         cont = 0;
+
 
         for(i = 0; i < g.size(); i++) {
             for(int j = 0; j < g[i].size(); j++) {
@@ -162,14 +181,10 @@ public:
             }
         }
 
-        std::cout << "after shapes size " << cont << std::endl;
 
 
-        for(int i = 0; i < shapes.size(); i++) {
-            if(shapes[i].tetra_config<1||shapes[i].tetra_config>4) {
-                std::cout << "error with shapes" << std::endl;
-            }
-        }
+
+
 
 
 
@@ -192,15 +207,25 @@ public:
 
 
     void execute_metis(std::vector<Matrix> tempM) {
-        print_file_metis();
-        int ret_code = system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number)).c_str());
-        if(ret_code!=0) {
-            exit(ret_code);
+        if(partitions_number > 1) {
+            print_file_metis();
+            int ret_code = system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number) + " > /dev/null").c_str());
+            if(ret_code!=0) {
+                exit(ret_code);
+            }
+            std::vector<int> parts = read_metis_vertices_output();
+            reorderPartitions(parts);
+            parts = read_metis_tetra_output();
+            reorderTetra(parts, tempM);
+        } else {
+            std::vector<int> parts(getNumberVertices(), 0);
+            reorderPartitions(parts);
+            parts = std::vector<int>(getNumberTetra(), 0);
+            reorderTetra(parts, tempM);
         }
-        std::vector<int> parts = read_metis_vertices_output();
-        reorderPartitions(parts);
-        parts = read_metis_tetra_output();
-        reorderTetra(parts, tempM);
+        
+        
+        
 
     }
 
@@ -365,8 +390,6 @@ public:
         std::ofstream output_file(output_file_name);
         if(!output_file.is_open()) {
             std::cout << "output file not opened " << output_file_name << std::endl;
-        } else {
-            std::cout << "output file path: " << output_file_name << std::endl;
         }
         //header
         output_file << "# vtk DataFile Version 3.0\n" <<
@@ -429,7 +452,6 @@ public:
 
         output_file.flush();
         output_file.close();
-        std::cout << "writing finished" << std::endl;
     }
 
     const std::vector<int>& get_tetra() const{
@@ -468,7 +490,7 @@ protected:
         pos.resize(partitions_vector.size());
         std::iota(pos.begin(), pos.end(),0);
         std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return partitions_vector[i] < partitions_vector[j];});
-        std::vector<Float> reordered_tetra;
+        std::vector<int> reordered_tetra;
         reordered_tetra.resize(tetra.size());
         partitions_tetrahedra.push_back(0);
         M.resize(6*pos.size());
@@ -489,13 +511,14 @@ protected:
             VectorExt e14 = x4+(-x1);
             VectorExt e24 = x4+(-x2);
             VectorExt e34 = x4+(-x3);
-            M[i * 6]     = e12.transpose() * (tempM[pos[i]] * e12);
-            M[i * 6 + 1] = e13.transpose() * (tempM[pos[i]] * e13);
-            M[i * 6 + 2] = e23.transpose() * (tempM[pos[i]] * e23);
-            M[i * 6 + 3] = e14.transpose() * (tempM[pos[i]] * e14);
-            M[i * 6 + 4] = e24.transpose() * (tempM[pos[i]] * e24);
-            M[i * 6 + 5] = e34.transpose() * (tempM[pos[i]] * e34);
+            M[i * 6]     = e12.transpose() * (tempM[i] * e12);
+            M[i * 6 + 1] = e13.transpose() * (tempM[i] * e13);
+            M[i * 6 + 2] = e23.transpose() * (tempM[i] * e23);
+            M[i * 6 + 3] = e14.transpose() * (tempM[i] * e14);
+            M[i * 6 + 4] = e24.transpose() * (tempM[i] * e24);
+            M[i * 6 + 5] = e34.transpose() * (tempM[i] * e34);
         }
+        //tetra = reordered_tetra;
     }
 
     void reorderPartitions(std::vector<int> partitions_vector) {
