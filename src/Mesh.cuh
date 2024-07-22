@@ -511,14 +511,14 @@ protected:
             VectorExt e14 = x4+(-x1);
             VectorExt e24 = x4+(-x2);
             VectorExt e34 = x4+(-x3);
-            M[i * 6]     = e12.transpose() * (tempM[i] * e12);
-            M[i * 6 + 1] = e13.transpose() * (tempM[i] * e13);
-            M[i * 6 + 2] = e23.transpose() * (tempM[i] * e23);
-            M[i * 6 + 3] = e14.transpose() * (tempM[i] * e14);
-            M[i * 6 + 4] = e24.transpose() * (tempM[i] * e24);
-            M[i * 6 + 5] = e34.transpose() * (tempM[i] * e34);
+            M[i * 6]     = e12.transpose() * (tempM[pos[i]] * e12);
+            M[i * 6 + 1] = e13.transpose() * (tempM[pos[i]] * e13);
+            M[i * 6 + 2] = e23.transpose() * (tempM[pos[i]] * e23);
+            M[i * 6 + 3] = e14.transpose() * (tempM[pos[i]] * e14);
+            M[i * 6 + 4] = e24.transpose() * (tempM[pos[i]] * e24);
+            M[i * 6 + 5] = e34.transpose() * (tempM[pos[i]] * e34);
         }
-        //tetra = reordered_tetra;
+        tetra = reordered_tetra;
     }
 
     void reorderPartitions(std::vector<int> partitions_vector) {

@@ -308,7 +308,8 @@ __global__ void domain_Sweep_shared_memory(TetraConfig* elemList, size_t* elemLi
         
         if(threadIdx.x == 0) {
             if(shared_sol < old_sol) {
-                atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
+                //atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
+                solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = shared_sol;
                 active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] = 1;
             }
         }
