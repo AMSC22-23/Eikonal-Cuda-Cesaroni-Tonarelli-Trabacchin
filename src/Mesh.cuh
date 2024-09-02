@@ -693,7 +693,11 @@ protected:
             ngh.resize(vertices_number);
             int num;
             for(int i=0; i<triangle_number; i++){
-                mesh_file>>buffer;
+                int element_type;
+                mesh_file>>element_type;
+                if(element_type != 4) {
+                    continue;
+                }
                 std::set<int> tmp;
                 for(int j=0; j<vertices_per_shape; j++){
                     mesh_file>>num;
