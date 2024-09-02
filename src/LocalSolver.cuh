@@ -5,6 +5,7 @@
 #include <cuda.h>
 #include "../src/CudaEikonalTraits.cuh"
 
+// class responsible for the implementation of the local solver
 template <size_t D, typename Float>
 class LocalSolver {
     /*using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
@@ -19,18 +20,19 @@ public:
     __host__ __device__ static Float solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
 
         int lookup_vertices[9];
-        lookup_vertices[1] = 0;
-        lookup_vertices[2] = 1;
-        lookup_vertices[4] = 2;
-        lookup_vertices[8] = 3;
+        lookup_vertices[1] = 0; // 0 -> 0 0 0 1 -> 2^0=1
+        lookup_vertices[2] = 1; // 1 -> 0 0 1 0 -> 2^1=2
+        lookup_vertices[4] = 2; // 2 -> 0 1 0 0 -> 2^2=4
+        lookup_vertices[8] = 3; // 3 -> 1 0 0 0 -> 2^3=8
 
         int lookup_edges_1[13];
-        lookup_edges_1[3] = 0;
-        lookup_edges_1[5] = 0;
-        lookup_edges_1[6] = 1;
-        lookup_edges_1[9] = 0;
-        lookup_edges_1[10] = 1;
-        lookup_edges_1[12] = 2;
+
+        lookup_edges_1[3] = 0;  // edge_01 -> 0 0 1 1 -> 3
+        lookup_edges_1[5] = 0;  // edge_02 -> 0 1 0 1 -> 5
+        lookup_edges_1[6] = 1;  // edge_12 -> 0 1 1 0 -> 6
+        lookup_edges_1[9] = 0;  // edge_03 -> 1 0 0 1 -> 9
+        lookup_edges_1[10] = 1; // edge_13 -> 1 0 1 0 -> 10
+        lookup_edges_1[12] = 2; // edge_23 -> 1 1 0 0 -> 12
 
         int lookup_edges_2[13];
         lookup_edges_2[3] = 1;
@@ -41,13 +43,6 @@ public:
         lookup_edges_2[12] = 3;
 
 
-
-
-
-
-
-
-
         Float lambda21;
         Float lambda22;
         Float lambda11;
@@ -55,19 +50,28 @@ public:
         Float lambda1;
         Float lambda2;
 
+        // (e_02)^T*M*(e_02)
         Float alpha1 = computeScalarProductDiagonal(0,2,0,2, M, shift, lookup_edges_1, lookup_edges_2);
+        // (e_12)^T*M*(e_02)
         Float alpha2 = computeScalarProduct(1,2,0,2, M, shift, lookup_edges_1, lookup_edges_2);
+        // (e_23)^T*M*(e_02)
         Float alpha3 = computeScalarProduct(2,3,0,2, M, shift, lookup_edges_1, lookup_edges_2);
 
+        // (e_02)^T*M*(e_12)
         Float beta1 = alpha2;
+        // (e_12)^T*M*(e_12)
         Float beta2 = computeScalarProductDiagonal(1,2,1,2,M, shift, lookup_edges_1, lookup_edges_2);
+        // (e_23)^T*M*(e_12)
         Float beta3 = computeScalarProduct(2,3,1,2,M, shift, lookup_edges_1, lookup_edges_2);
 
+        // (e_02)^T*M*(e_23)
         Float gamma1 = alpha3;
+        // (e_12)^T*M*(e_23)
         Float gamma2 = beta3;
+        // (e_23)^T*M*(e_23)
         Float gamma3 = computeScalarProductDiagonal(2,3,2,3,M, shift, lookup_edges_1, lookup_edges_2);
 
-
+        // M_prime = [alpha, beta, gamma]
         Matrix M_prime;
         M_prime << alpha1, beta1, gamma1,
                 alpha2, beta2, gamma2,
@@ -298,33 +302,35 @@ public:
 
     }
 
+    // method to retrieve edge
     __host__ __device__ static int getGrayCode(int k, int l) {
         return 1<<k | 1<<l;
     }
 
+    // method to retrieve vertex
     __host__ __device__ static int getGrayCode(int k) {
         return 1<<k;
     }
 
-    //invert getGrayCode
+    // invert getGrayCode (edge)
     __host__ __device__ static auto getOriginalNumbers(int gray) {
         if(gray == 3) {
-            return std::make_tuple(0,1);
+            return std::make_tuple(0,1); // edge_01
         }
         else if(gray == 5) {
-            return std::make_tuple(0,2);
+            return std::make_tuple(0,2); // edge_02
         }
         else if(gray == 6) {
-            return std::make_tuple(1,2);
+            return std::make_tuple(1,2); // edge_12
         }
         else if(gray == 9) {
-            return std::make_tuple(0,3);
+            return std::make_tuple(0,3); // edge_03
         }
         else if(gray == 10) {
-            return std::make_tuple(1,3);
+            return std::make_tuple(1,3); // edge_13
         }
         else if(gray == 12) {
-            return std::make_tuple(2,3);
+            return std::make_tuple(2,3); // edge_23
         }
         else {
             printf("wrong gray code double %d\n", gray);
@@ -332,7 +338,7 @@ public:
         }
     }
 
-
+    // invert getGrayCode (vertex)
     __host__ __device__ static auto getOriginalNumber(int gray) {
         if(gray == 1) {
             return 0;
