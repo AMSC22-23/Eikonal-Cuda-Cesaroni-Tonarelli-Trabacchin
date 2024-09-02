@@ -33,9 +33,12 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts, const std::string& matrix_file_path) : partitions_number(nparts){
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
+        
+    
         tetra.resize(sets.size() * (D+1));
         int i = 0;
         for(auto &t : sets) {
+            if(t.size() != D+1) continue;
             int j = 0;
             for(auto &v : t) {
                 tetra[i+j] = v;
@@ -54,6 +57,7 @@ public:
                 g[tetra[j+i]].push_back(i/(D+1));
             }
         }
+
 
         ngh.resize(getNumberVertices());
         ngh[0] = 0;
@@ -695,11 +699,11 @@ protected:
             for(int i=0; i<triangle_number; i++){
                 int element_type;
                 mesh_file>>element_type;
-                if(element_type != 4) {
+                /*if(element_type != 4) {
                     continue;
-                }
+                }*/
                 std::set<int> tmp;
-                for(int j=0; j<vertices_per_shape; j++){
+                for(int j=0; j<element_type; j++){
                     mesh_file>>num;
                     tmp.insert(map_vertices[num]);
                 }
