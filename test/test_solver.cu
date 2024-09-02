@@ -34,11 +34,12 @@ int main(int argc, char* argv[]){
 
         // Instantiating mesh
         Mesh<D,float> mesh(input_fileName, num_parts, M);
+        std::cout << "done with the mesh" << std::endl;
         // Setting boundary
         std::vector<int> boundary;
         boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 0, 0})));
 
-        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 1, 1})));
+        //boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 1, 1})));
 
         // Instantiating Eikonal Solver
         Solver<D,float> solver(&mesh);
