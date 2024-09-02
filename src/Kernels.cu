@@ -18,6 +18,9 @@ using Matrix = typename Eikonal::Eikonal_traits<D,2>::AnisotropyM;
 using VectorV = typename Eigen::Matrix<double,4,1>;
 */
 
+// function, callable only from device code, designed to replace the value
+// at a given memory address if the new value is smaller than the current value,
+// ensuring atomicity and correctness in concurrent GPU computations.
 template <typename Float>
 __device__ Float atomicSwapIfLess(Float* address, Float value) {
     Float swap, old;
@@ -69,7 +72,7 @@ __device__ double atomicSwapIfLess(double* address, double value) {
 
 }
 
-
+// function to set solution_dev to infinity value
 template <typename Float>
 __global__ void setSolutionsToInfinity(Float* solutions_dev, Float infinity_value, size_t size_sol){
     unsigned int threadId = threadIdx.x + blockIdx.x * blockDim.x;
@@ -78,16 +81,19 @@ __global__ void setSolutionsToInfinity(Float* solutions_dev, Float infinity_valu
     }
 }
 
+// method to initialize solutions for source nodes to zero and identify
+//active domains based on the source nodes
 template <typename Float>
 __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_nodes_dev, int* active_domains_dev, int* partitions_vertices_dev, int partitions_number, size_t size_sources){
     unsigned int threadId = threadIdx.x + blockIdx.x * blockDim.x;
     if(threadId < size_sources) {
-
         solutions_dev[source_nodes_dev[threadId]] = 0.0;
         bool found = false;
         for(int i = 0; i < partitions_number && !found; i++) {
             if (source_nodes_dev[threadId] <= partitions_vertices_dev[i]) {
-                active_domains_dev[i] = 1; //there is no need to use atomic operations since if multiple threads try to access the memory location they all write 1
+                //there is no need to use atomic operations since if multiple
+                // threads try to access the memory location they all write 1
+                active_domains_dev[i] = 1;
                 found = true;
             }
         }
@@ -100,7 +106,7 @@ __global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_
 //requires tid + domain_begin < total number of vertices in mesh
 //length(map) == length(output)
 //requires map being the exclusive scan of a boolean array predicate
-//reqquires max(map) < lenght(output) : ok, map is non-decreasing and the max value is in the last position. At most its value is equals to length(map) == length(output)
+//requires max(map) < lenght(output) : ok, map is non-decreasing and the max value is in the last position. At most its value is equals to length(map) == length(output)
 //requires doesn't exist i,j such that map[i] == map[j] && predicate[i] == predicate[j] == 1 : ok, suppose (without loss of generality) that  i < j, then map[i] = a and map[j] = b + predicate[i] + a
 //requires map containing all and only numbers from 0 to max(map), satisfied as map is non-decreasing and the max difference between map[i+1] and map[i] is 1.
 //ensures that 1) if predicate[i] == 1 than exists j such that output[j] == i + domain_begin 2)if map[i] is written to, then for each 0 <= j < i are also written to. (satisfied)
