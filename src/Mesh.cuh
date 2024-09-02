@@ -16,6 +16,9 @@
 #include <cstdlib>
 #include <cstdio>
 #include "../src/CudaEikonalTraits.cuh"
+#define IDXTYPEWIDTH 32
+#define REALTYPEWIDTH 64
+#include "../../lib/METIS/include/metis.h"
 
 struct TetraConfig {
     int tetra_index;
@@ -48,7 +51,7 @@ public:
         }
 
         std::vector<Matrix> tempM = readMatrices(matrix_file_path);
-        execute_metis(tempM);
+        execute_metis_api(tempM);
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -143,7 +146,7 @@ public:
             /*test only*/
 
         }
-        execute_metis(tempM);
+        execute_metis_api(tempM);
 
 
         std::vector<std::vector<int>> g;
@@ -207,6 +210,47 @@ public:
             std::vector<int> n = getNeighbors(i);
             neighbors.insert(neighbors.end(), n.begin(), n.end());
         }*/
+    }
+
+
+    void execute_metis_api(std::vector<Matrix> tempM) {
+        if(partitions_number > 1) {
+            idx_t tetra_number = tetra.size()/(D+1);
+            idx_t vertices_number = geo.size()/D;
+            idx_t objval;
+            std::vector<idx_t> elements_subdivision;
+            elements_subdivision.resize(tetra_number + 1);
+            for(int i = 0; i < tetra_number+1; i++) {
+                elements_subdivision[i] = 4*i;
+            }
+            std::vector<idx_t> parts_vertices;
+            parts_vertices.resize(vertices_number);
+            std::vector<idx_t> parts_tetra;
+            parts_tetra.resize(tetra_number);
+            idx_t ncomm = 3;
+            idx_t metis_result = METIS_PartMeshDual(&tetra_number, &vertices_number, elements_subdivision.data() , tetra.data(), 0, 0, &ncomm, &partitions_number, 0, 0, &objval, parts_tetra.data(), parts_vertices.data());
+            if(metis_result != METIS_OK) {
+                std::cout << metis_result << std::endl;
+                exit(-1);
+            }
+            std::cout << "metis done" << std::endl;
+
+
+            /*print_file_metis();
+            int ret_code = system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number) + " > /dev/null").c_str());
+            if(ret_code!=0) {
+                exit(ret_code);
+            }
+            std::vector<int> parts = read_metis_vertices_output();
+            */
+            reorderPartitions(parts_vertices);
+            reorderTetra(parts_tetra, tempM);
+        } else {
+            std::vector<int> parts(getNumberVertices(), 0);
+            reorderPartitions(parts);
+            parts = std::vector<int>(getNumberTetra(), 0);
+            reorderTetra(parts, tempM);
+        }
     }
 
 
