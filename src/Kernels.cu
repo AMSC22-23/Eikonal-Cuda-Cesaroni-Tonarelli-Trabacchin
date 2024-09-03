@@ -157,7 +157,6 @@ __global__ void count_Nbhs(int* cList, int* ngh, int* result, size_t active_node
 __global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* elemList, size_t active_nodes, size_t* elemListSize, int* ngh_dev, TetraConfig* shapes_dev) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if(tid == 0) {
-        //printf("active nodes %d %p %p %p %p %p\n", active_nodes , &sAd[0], &nbhNr[active_nodes - 1], &cList[tid], &ngh_dev[cList[tid]], &nbhNr[tid]);
 
         *elemListSize = 
         sAd[active_nodes - 1] + 
@@ -177,7 +176,7 @@ __global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* e
 
 //number of blocks is assumed to be precise
 template <int D, typename Float>
-__global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin, int domain_size) {
+__global__ void constructPredicate(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin, int domain_size) {
 
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
@@ -188,7 +187,6 @@ __global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t*
     int upper_bound = ((sAddr_index != active_nodes - 1) ? sAddr[sAddr_index + 1] : (int)*elemListSize);
     __shared__ Float shared_sol;
     Float old_sol;
-    //int old_active_status;
     VectorExt coordinates[4];
     VectorV values;
     TetraConfig tetra;
@@ -196,7 +194,6 @@ __global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t*
 
         tetra = elemList[elemList_index];
         old_sol = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1]];
-        //old_active_status = active_list_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1] - domain_begin];
         if(threadIdx.x == 0) {
             shared_sol = old_sol;
         }
@@ -214,9 +211,6 @@ __global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t*
         const Float* M;
         M = M_dev + tetra.tetra_index * 6;
         Float sol = LocalSolver<D, Float>::solve(coordinates, values, M, D+1-tetra.tetra_config);
-        /*if(tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1] == 39) {
-            printf("solution found for 39 : %f tetra_index : %d, %d %d \n", shared_sol, tetra.tetra_index, elemList_index, upper_bound);
-        }*/
         atomicSwapIfLess<Float>(&shared_sol, sol);        
     }
     __syncthreads();
@@ -229,7 +223,6 @@ __global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t*
                 if(j != tetra.tetra_config - 1) {
                     if(solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + j]] - shared_sol > 0) {
                         predicate[tetra_dev[(D+1) * tetra.tetra_index + j]] = 1;
-                        //printf("vertex %d added to predicate\n", tetra_dev[(D+1) * tetra.tetra_index + j]);
                     }
                 }
             }
@@ -246,10 +239,6 @@ __global__ void construct_predicate_shared_memory(TetraConfig* elemList, size_t*
             atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
 
         }
-
-        
-        
-       
     }
 
 
@@ -272,7 +261,7 @@ __global__ void removeConvergedNodes(int* active_list, int size) {
 
 
 template <int D, typename Float>
-__global__ void domain_Sweep_shared_memory(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* active_list, Float* M_dev, Float tol, int domain_begin) {
+__global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* active_list, Float* M_dev, Float tol, int domain_begin) {
 
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
@@ -289,13 +278,16 @@ __global__ void domain_Sweep_shared_memory(TetraConfig* elemList, size_t* elemLi
     TetraConfig tetra;
     if(elemList_index < upper_bound) {
         tetra = elemList[elemList_index];
+        if(active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] != 0) {
+            return;
+        }
         old_sol = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1]];
         if(threadIdx.x == 0) {
             shared_sol = old_sol;
         }
     }
     __syncthreads();
-    if(elemList_index < upper_bound && active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] == 0) {
+    if(elemList_index < upper_bound) {
         for(int j = 0; j < D + 1; j++){
             for(int k = 0; k < D; k++) {
                 coordinates[j][k] =  geo_dev[D * tetra_dev[(D+1) * tetra.tetra_index + j] + k];
@@ -314,7 +306,6 @@ __global__ void domain_Sweep_shared_memory(TetraConfig* elemList, size_t* elemLi
         
         if(threadIdx.x == 0) {
             if(shared_sol < old_sol) {
-                //atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
                 solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = shared_sol;
                 active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] = 1;
             }
@@ -325,49 +316,11 @@ __global__ void domain_Sweep_shared_memory(TetraConfig* elemList, size_t* elemLi
 __global__ void propagatePredicate(int* active_list_dev, int domain_size, int begin_domain, int* predicate) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if(tid < domain_size) {
-        //if(active_list_dev[tid] != 2) {
             if(predicate[begin_domain + tid] == 1) {
                 active_list_dev[tid] = 1;
-                //printf("added node %d \n", tid + begin_domain);
             }
-            //active_list_dev[tid] |= predicate[begin_domain + tid];
-        //}
         predicate[begin_domain + tid] = 0;
     }
 }
-
-template <typename Float>
-__global__ void activeListPrint(int* active_list, Float* solutions, int begin_domain, int size) {
-    for(int i = 0; i < size; i++) {
-        printf("%d (%f) ", active_list[i], solutions[active_list[i]]);
-    }
-    printf("\n");
-}
-
-__global__ void elemListPrint(TetraConfig* elem_list, int* tetra_dev, size_t* size) {
-    for(int i = 0; i < *size; i++) {
-        printf("(%d %d %d %d)\n", tetra_dev[4*elem_list[i].tetra_index + 0], tetra_dev[4*elem_list[i].tetra_index + 1], tetra_dev[4*elem_list[i].tetra_index + 2], tetra_dev[4*elem_list[i].tetra_index + 3]);
-    }
-    printf("\n");
-}
-
-
-__global__ void checkZero(int* begin, int* end) {
-    while(begin!=end) {
-        if(*begin != 0) {
-            printf("error %d\n", *begin);
-        }
-        begin++;
-    }
-}
-
-__global__ void active_print(int* list, int size) {
-    for(int i = 0; i < size; i++) {
-        if(list[i] == 1) {
-            //printf("active lists contains %d\n", i);
-        }
-    }
-}
-
 
 #endif

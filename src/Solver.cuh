@@ -108,7 +108,6 @@ public:
             active_lists_dev[i] = thrust::device_vector<int>(vec_size);//shorter
             predicate[i] = thrust::device_vector<int>(mesh->getNumberVertices(), 0);//long
             elemLists[i] = thrust::device_vector<TetraConfig>(getTetraNumberinDomain(i));//shorter
-            //s[i] = thrust::device_vector<int>(mesh->getNumberVertices());
             active_lists[i] = thrust::host_vector<int>(vec_size, 0);
         }
 
@@ -148,30 +147,23 @@ public:
                     compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size ,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
                     count_Nbhs<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(cLists[domain].data()), ngh_dev, thrust::raw_pointer_cast(nbhNrs[domain].data()), active_nodes, mesh->getNumberVertices() ,mesh->getShapes().size());
                     thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), nbhNrs[domain].begin(), nbhNrs[domain].begin() + active_nodes, sAddrs[domain].begin());
-                    //activeListPrint<Float><<<1,1>>>(thrust::raw_pointer_cast(cLists[domain].data()), solutions_dev, begin_domain, active_nodes);
                     gather_elements<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(cLists[domain].data()), thrust::raw_pointer_cast(nbhNrs[domain].data()),
                                                                                     thrust::raw_pointer_cast(elemLists[domain].data()), active_nodes, thrust::raw_pointer_cast(&elemListSizes[domain]), ngh_dev, shapes_dev);
-                    construct_predicate_shared_memory<D, Float><<<active_nodes, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()), thrust::raw_pointer_cast(&elemListSizes[domain]), active_nodes, thrust::raw_pointer_cast(sAddrs[domain].data()), tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(predicate[domain].data()), M_dev, tol, thrust::raw_pointer_cast(active_lists_dev[domain].data()), begin_domain, domain_size);
+                    constructPredicate<D, Float><<<active_nodes, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()), thrust::raw_pointer_cast(&elemListSizes[domain]), active_nodes, thrust::raw_pointer_cast(sAddrs[domain].data()), tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(predicate[domain].data()), M_dev, tol, thrust::raw_pointer_cast(active_lists_dev[domain].data()), begin_domain, domain_size);
                     thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, sAddrs[domain].begin());
                     compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(predicate[domain].data()) + begin_domain, domain_size,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
                     int active_neighbors_node = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 1);//count of the current domain activated nodes, other will be processed by other domains in a successive iteration
                     if(active_neighbors_node != 0) {
                         count_Nbhs<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(cLists[domain].data()), ngh_dev, thrust::raw_pointer_cast(nbhNrs[domain].data()), active_neighbors_node, mesh->getNumberVertices() ,mesh->getShapes().size());
                         thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), nbhNrs[domain].begin(), nbhNrs[domain].begin() + active_neighbors_node, sAddrs[domain].begin());
-                        cudaStreamSynchronize(streams[domain]);
                         gather_elements<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(cLists[domain].data()), thrust::raw_pointer_cast(nbhNrs[domain].data()),
                                                                                     thrust::raw_pointer_cast(elemLists[domain].data()), active_neighbors_node, thrust::raw_pointer_cast(&elemListSizes[domain]), ngh_dev, shapes_dev);
-                        domain_Sweep_shared_memory<D, Float><<<active_neighbors_node, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()),thrust::raw_pointer_cast(&elemListSizes[domain]),active_neighbors_node, thrust::raw_pointer_cast(sAddrs[domain].data()),tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(active_lists_dev[domain].data()), M_dev, tol, begin_domain);
+                        processNodes<D, Float><<<active_neighbors_node, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()),thrust::raw_pointer_cast(&elemListSizes[domain]),active_neighbors_node, thrust::raw_pointer_cast(sAddrs[domain].data()),tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(active_lists_dev[domain].data()), M_dev, tol, begin_domain);
                     }
 
                     removeConvergedNodes<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size);
                     active_nodes = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), 1);
                     thrust::fill(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 0);
-
-                    //cudaStreamSynchronize(streams[domain]);
-                    //cudaStreamSynchronize(streams[domain]);
-                    //cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
-                    //mesh->getSolutionsVTK(output_file_name+std::to_string(inner_cont), solutions);
                 }
 
             }
@@ -194,31 +186,6 @@ public:
 
         
         cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
-        /*
-            begin debug
-        
-        Matrix M;
-        M << 0.01,0,0,
-            0,0.01,0,
-            0,0,0.01;
-        
-            double error = 0;
-
-        for(int i = 0; i < mesh->getNumberVertices(); i++) {
-
-            VectorExt v;
-            for(int j = 0; j < D; j++) {
-                v[j] = mesh->getGeo()[D*i+j];
-            }
-            error += std::abs(std::sqrt(v.transpose()*M*v) - solutions[i]);
-            std::cout << i <<": " << solutions[i] << " actual: " << std::sqrt(v.transpose()*M*v) <<  std::endl;
-        }
-        std::cout << error/mesh->getNumberVertices() << std::endl;
-
-
-        
-            end debug
-        */
         mesh->getSolutionsVTK(output_file_name, solutions);
 
         // destroy streams

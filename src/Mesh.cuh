@@ -95,24 +95,6 @@ public:
                 cont++;
             }
         }
-
-
-
-        /*
-        for(auto &x : g) {
-            for(auto &y : x) {
-                shapes[cont] = y;
-                cont++;
-            }
-        }
-         */
-
-        /*indices.resize(getNumberVertices());
-        for(int i = 0; i < getNumberVertices(); i++){
-            indices[i] = neighbors.size();
-            std::vector<int> n = getNeighbors(i);
-            neighbors.insert(neighbors.end(), n.begin(), n.end());
-        }*/
     }
 
     Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
@@ -140,20 +122,6 @@ public:
         for(i = 0; i < tetra.size() / (D + 1); i++){
             // We initialize each matrix using the one provided as a constructor parameter.
             tempM[i] = velocity;
-
-            /*test only*/
-
-            int v1 = tetra[(D+1) * i];
-            Float v1_x = geo[D*v1];
-            Float v1_y = geo[D*v1 + 1];
-            Float v1_z = geo[D*v1 + 2];
-
-            //if(i / ((tetra.size()/(2*(D+1)))) == 0) {
-            if(v1_x + v1_y + v1_z >= 1.5) {
-                tempM[i] = 4.0 * velocity;
-                cont_modified_tetra++;
-            }
-
         }
         // we perform the partitioning providing the vector of matrices to the method
         execute_metis_api(tempM);
@@ -184,38 +152,15 @@ public:
             for(int j = 0; j < g[i].size(); j++) {
                 shapes[cont].tetra_index = g[i][j];
                 int tetra_to_search = g[i][j];
-                bool sanity_check = false;
                 for(int k = 0; k < 4; k++) {
                     if(tetra[4 * tetra_to_search + k] == i) {
                         shapes[cont].tetra_config = k + 1;
-                        sanity_check = true;
                     }
                 }
-                if(!sanity_check) {
-                    std::cout << "sanity error" << std::endl;
-                }
                 cont++;
             }
         }
 
-
-
-
-        /*
-        for(auto &x : g) {
-            for(auto &y : x) {
-                shapes[cont] = y;
-                cont++;
-            }
-        }
-         */
-
-        /*indices.resize(getNumberVertices());
-        for(int i = 0; i < getNumberVertices(); i++){
-            indices[i] = neighbors.size();
-            std::vector<int> n = getNeighbors(i);
-            neighbors.insert(neighbors.end(), n.begin(), n.end());
-        }*/
     }
 
 
@@ -239,16 +184,7 @@ public:
                 std::cout << metis_result << std::endl;
                 exit(-1);
             }
-            std::cout << "metis done" << std::endl;
 
-
-            /*print_file_metis();
-            int ret_code = system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number) + " > /dev/null").c_str());
-            if(ret_code!=0) {
-                exit(ret_code);
-            }
-            std::vector<int> parts = read_metis_vertices_output();
-            */
             reorderPartitions(parts_vertices);
             reorderTetra(parts_tetra, tempM);
         } else {
@@ -400,13 +336,7 @@ public:
         return min_vertex;
     }
 
-    /*const std::vector<int>& getVectorNeighbors() const{
-        return neighbors;
-    }
 
-    const std::vector<int>& getVectorNeighborsIndices() const{
-        return indices;
-    }*/
 
     void print_file_metis(){
         std::ofstream output_file("metis_input.txt");
@@ -420,14 +350,7 @@ public:
             }
             output_file << std::endl;
         }
-        /*
-        for(auto &s : element_set) {
-            for(auto &x : s) {
-                output_file << x+1 << " ";
-            }
-            output_file << std::endl;
-        }
-         */
+        
         output_file.close();
     }
 
@@ -472,9 +395,7 @@ public:
         output_file << "\n";
 
         //  cells
-        /*auto [num_shapes, str] = getStringMeshShapes();
-        output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
-        output_file << str << std::endl;*/
+    
         int num_shapes = tetra.size()/(D+1);
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
 
@@ -485,17 +406,6 @@ public:
             }
             output_file << std::endl;
         }
-
-
-
-        /*for(auto x: s){
-            output_file << D+1 << "  ";
-            for(auto y: x){
-                output_file << "  " << y;
-            }
-            output_file << std::endl;
-        }
-         */
 
         // cell_types
         int n = 10;
@@ -605,10 +515,7 @@ protected:
         std::vector<Float> reordered_geo;
         reordered_geo.resize(0);
         map_vertices.resize(geo.size() / D);
-        //std::vector<int> reordered_shapes(shapes.size());
-        //std::vector<int> reordered_ngh(ngh.size());
         int cont_partitions = 0;
-        //reordered_ngh[0] = 0;
         // we map each original vertex index to its new index after sorting
         for(int i = 0; i < pos.size(); i++) {
             map_vertices[pos[i]] = i;
@@ -626,22 +533,10 @@ protected:
                     partitions_vertices[cont_partitions] = current_index;
                     cont_partitions++;
                     for(int j : same){
-                        //map_vertices[j] = (int)reordered_geo.size() / D;
                         // the reordered coordinates are stored in reordered_geo
                         for(int i = 0; i < D; i++) {
                             reordered_geo.push_back(geo[j*D+i]);
                         }
-                        /*
-                        int begin = ngh[j];
-                        int end = (j != ngh.size() - 1) ? ngh[j + 1] : shapes.size();
-                        reordered_ngh[cont_ngh] = cont_shapes;
-                        for(int i = begin; i < end; i++) {
-                            reordered_shapes[cont_shapes] = map_vertices[shapes[i]];
-                            cont_shapes++;
-                        }
-
-                        cont_ngh++;
-                        */
                     }
 
                     break;
@@ -655,9 +550,6 @@ protected:
         }
 
         geo = reordered_geo;
-        //shapes = reordered_shapes;
-        //ngh = reordered_ngh;
-
 
     }
 
@@ -787,9 +679,6 @@ protected:
             for(int i=0; i<triangle_number; i++){
                 int element_type;
                 mesh_file>>element_type;
-                /*if(element_type != 4) {
-                    continue;
-                }*/
                 std::set<int> tmp;
                 for(int j=0; j<element_type; j++){
                     mesh_file>>num;
