@@ -30,7 +30,7 @@ add_executable(test test/test_local_solver.cu src/Kernels.cu src/Solver.cuh)
 add_executable(main test/test_solver.cu src/Solver.cuh src/Mesh.cuh)
 
 target_link_libraries(main
-   /usr/local/lib/libGKlib.so
+   ~/local/lib/libGKlib.so
    ~/local/lib/libmetis.so
 )
 
@@ -53,4 +53,3 @@ target_compile_options(test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
         -O3
         --expt-relaxed-constexpr
         >)
-
