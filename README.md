@@ -50,19 +50,9 @@ For more details, always refer to the documentation.
 
 ## Usage
 After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, 
-the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) software and of Thrust CUDA parallel library is required. To install them, access the repo and run the following:
+the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) and [GKlib](https://github.com/KarypisLab/GKlib) software is required. To install them, access the repo and run the following:
 ```bash
-$ mkdir lib
-$ cd lib
-$ git clone --recursive https://github.com/NVIDIA/thrust.git
-$ git clone https://github.com/KarypisLab/GKlib.git
-$ make config
-$ make
-$ cd ..
-$ git clone https://github.com/KarypisLab/METIS.git
-$ cd METIS
-$ make config shared=1 cc=gcc prefix=~/local
-$ make install
+$ ./install_dependences.sh
 ```
 
 Then, to build the executable, from the root folder run the following commands:
@@ -74,7 +64,7 @@ $ make
 ```
 An executable for the test will be created into `/build`, and can be executed through:
 ```bash
-$ ./test input-filename num-partitions output-filename
+$ ./eikonal input-filename num-partitions output-filename
 ```
 
 where:
@@ -89,7 +79,7 @@ defaulted respectively to the identity matrix and the vertex nearest to the orig
 We have already provided some meshes in the folder `test/meshes/input_meshes`.<br> 
 One example is:
 ```bash
-$ ./triangulated ../test/meshes/input_meshes/cube-5.vtk 4 output-cube5
+$ ./eikoanl ../test/meshes/input_meshes/cube-5.vtk 4 output-cube5
 ```
 will execute the algorithm on a cubic test model and will save the output into the file `output-cube5`.
 

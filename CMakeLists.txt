@@ -24,10 +24,7 @@ link_directories(~/local/lib)
 link_directories(/usr/local/lib)
 include_directories(~/local/include)
 
-
-add_executable(test test/test_local_solver.cu src/Kernels.cu src/Solver.cuh)
-
-add_executable(main test/test_solver.cu src/Solver.cuh src/Mesh.cuh)
+add_executable(eikonal test/test_solver.cu src/Solver.cuh src/Mesh.cuh)
 
 target_link_libraries(main
    ~/local/lib/libGKlib.so
