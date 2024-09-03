@@ -18,7 +18,7 @@
 #include "../src/CudaEikonalTraits.cuh"
 #define IDXTYPEWIDTH 32
 #define REALTYPEWIDTH 64
-#include "../../lib/METIS/include/metis.h"
+#include "../lib/METIS/include/metis.h"
 
 // struct storing the index associated to the tetrahedron and
 // its configuration (we have 4 possible configurations)
@@ -461,27 +461,27 @@ protected:
     // we reorder the tetrahedra according to the partition they belong to
     void reorderTetra(std::vector<int> partitions_vector, std::vector<Matrix> tempM){
 
-        partitions_tetrahedra.resize(partitions_number);
+        //partitions_tetrahedra.resize(partitions_number);
         std::vector<int> pos;
         pos.resize(partitions_vector.size());
         std::iota(pos.begin(), pos.end(),0);
         std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return partitions_vector[i] < partitions_vector[j];});
         std::vector<int> reordered_tetra;
         reordered_tetra.resize(tetra.size());
-        partitions_tetrahedra.push_back(0);
+        //partitions_tetrahedra.push_back(0);
         // The matrix is symmetric so we can store only 6 Floats for each tetrahedron
         M.resize(6*pos.size());
         for(int i = 0; i < pos.size(); i++){
-            if(i!=0 && partitions_vector[pos[i]]!= partitions_vector[pos[i-1]]){
+            /*if(i!=0 && partitions_vector[pos[i]]!= partitions_vector[pos[i-1]]){
                 partitions_tetrahedra.push_back(4*i);
-            }
+            }*/
             for(int j=0; j<D+1; j++){
                 reordered_tetra[4*i+j] = tetra[4*pos[i]+j];
             }
-            VectorExt x1 = getCoordinates<VectorExt>(tetra[4*i]);
-            VectorExt x2 = getCoordinates<VectorExt>(tetra[4*i+1]);
-            VectorExt x3 = getCoordinates<VectorExt>(tetra[4*i+2]);
-            VectorExt x4 = getCoordinates<VectorExt>(tetra[4*i+3]);
+            VectorExt x1 = getCoordinates<VectorExt>(tetra[4*pos[i]]);
+            VectorExt x2 = getCoordinates<VectorExt>(tetra[4*pos[i]+1]);
+            VectorExt x3 = getCoordinates<VectorExt>(tetra[4*pos[i]+2]);
+            VectorExt x4 = getCoordinates<VectorExt>(tetra[4*pos[i]+3]);
             VectorExt e12 = x2+(-x1);
             VectorExt e13 = x3+(-x1);
             VectorExt e23 = x3+(-x2);
