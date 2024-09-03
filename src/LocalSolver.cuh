@@ -194,24 +194,6 @@ public:
         *lambda12 = (- b * (*lambda22) - c) / a;
     }
 
-
-    //for face x,y phi = phi(y) - phi(x), alpha = e(x,y)'Me(x,y), beta = e(x,4)'Me(x,y), gamma = e(x,4)'Me(e,4)
-    __host__ __device__ static void solve2D(Float phi, Float alpha, Float beta, Float gamma, Float* lambda1, Float* lambda2){
-        Float a = (alpha - phi * phi) * alpha;
-        Float b = 2 * beta * (phi * phi - alpha);
-        Float c = beta * beta - phi * phi * gamma;
-
-        Float delta = std::sqrt(b * b - 4 * a * c);
-
-        if(b >= 0) {
-            *lambda1 = (-b - delta) / (2 * a);
-            *lambda2 = 2 * c / (-b - delta);
-        } else {
-            *lambda1 = (-b + delta) / (2 * a);
-            *lambda2 = 2 * c / (-b + delta);
-        }
-    }
-
     __host__ __device__ static bool check_gray(int gray, int & l1_new, int & l2_new) {
         if(gray == 3 || gray == 5 || gray == 6 || gray == 9 || gray == 10 || gray==12) {
             return true;

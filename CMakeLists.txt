@@ -46,6 +46,7 @@ target_compile_options(main PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
         -lGKlib
         -lmetis
         -O3
+        -diag-suppress 20012
         >)
 
 target_compile_options(test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:

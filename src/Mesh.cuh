@@ -97,7 +97,7 @@ public:
         }
     }
 
-    Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
+    Mesh(const std::string& mesh_file_path, int nparts, const Matrix& velocity) : partitions_number(nparts){
         // sets contains the tetrahedra. Each set element represents a tetrahedron
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
         // tetra is filled with the indices of the vertices that form the tetrahedron
@@ -115,7 +115,6 @@ public:
         std::vector<Matrix> tempM;
         // we have a matrix associated to each tetrahedron
         tempM.resize(tetra.size()/(D+1));
-        int cont_modified_tetra = 0;
 
 
 
@@ -164,7 +163,7 @@ public:
     }
 
 
-    void execute_metis_api(std::vector<Matrix> tempM) {
+    void execute_metis_api(const std::vector<Matrix>& tempM) {
         if(partitions_number > 1) {
             idx_t tetra_number = tetra.size()/(D+1);
             idx_t vertices_number = geo.size()/D;
@@ -196,7 +195,7 @@ public:
     }
 
 
-    void execute_metis(std::vector<Matrix> tempM) {
+    void execute_metis(const std::vector<Matrix>& tempM) {
         if(partitions_number > 1) {
             // we generate the input file for metis
             print_file_metis();
@@ -250,31 +249,31 @@ public:
     };
 
 
-    int getVerticesPerShape() const {
+    /*int getVerticesPerShape() const {
         return vertices_per_shape;
-    }
+    }*/
 
     // method returns the total number of tetrahedra
     int getNumberTetra() const{
-        return tetra.size() / 4;
+        return tetra.size() / (D+1);
     }
 
-    std::vector<int> getNeighbors(size_t vertex) const {
+    /*std::vector<int> getNeighbors(size_t vertex) const {
         std::set<int> n;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
             n.insert(shapes[i].tetra_index);
         }
         std::vector<int> res(n.begin(), n.end());
         return res;
-    }
+    }*/
 
-    std::vector<int> getShapes(size_t vertex) const {
+    /*std::vector<int> getShapes(size_t vertex) const {
         std::vector<int> shapes_v;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
             shapes_v.emplace_back(shapes[i]);
         }
         return shapes_v;
-    }
+    }*/
 
     // method that provided a vertex (index) returns its coordinates
     template<typename V>
@@ -307,19 +306,19 @@ public:
         return partitions_number;
     }
 
-    std::vector<int>& getPartitionVertices() {
+    const std::vector<int>& getPartitionVertices() const{
         return partitions_vertices;
     }
 
-    std::vector<int>& getPartitionTetra() {
+    const std::vector<int>& getPartitionTetra() const{
         return partitions_tetrahedra;
     }
 
-    std::vector<Float>& getGeo() {
+    const std::vector<Float>& getGeo() const {
         return geo;
     }
 
-    std::vector<TetraConfig>& getShapes() {
+    const std::vector<TetraConfig>& getShapes() const {
         return shapes;
     }
 

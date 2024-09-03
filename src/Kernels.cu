@@ -5,18 +5,11 @@
 #include <random>
 #include <set>
 #include <array>
-//#include "../localProblem_alt2/include/Phi.hpp"
-//#include "../localProblem_alt2/include/solveEikonalLocalProblem.hpp"
 #include "Mesh.cuh"
 #include "LocalSolver.cuh"
 #include "CudaEikonalTraits.cuh"
 #include <cmath>
 constexpr int D = 3;
-/*
-using VectorExt = typename Eikonal::Eikonal_traits<3, 2>::VectorExt;
-using Matrix = typename Eikonal::Eikonal_traits<D,2>::AnisotropyM;
-using VectorV = typename Eigen::Matrix<double,4,1>;
-*/
 
 // function, callable only from device code, designed to replace the value
 // at a given memory address if the new value is smaller than the current value,
@@ -84,19 +77,10 @@ __global__ void setSolutionsToInfinity(Float* solutions_dev, Float infinity_valu
 // method to initialize solutions for source nodes to zero and identify
 //active domains based on the source nodes
 template <typename Float>
-__global__ void setSolutionsSourcesAndDomains(Float* solutions_dev, int* source_nodes_dev, int* active_domains_dev, int* partitions_vertices_dev, int partitions_number, size_t size_sources){
+__global__ void setSolutionsSources(Float* solutions_dev, int* source_nodes_dev, size_t size_sources){
     unsigned int threadId = threadIdx.x + blockIdx.x * blockDim.x;
     if(threadId < size_sources) {
         solutions_dev[source_nodes_dev[threadId]] = 0.0;
-        bool found = false;
-        for(int i = 0; i < partitions_number && !found; i++) {
-            if (source_nodes_dev[threadId] <= partitions_vertices_dev[i]) {
-                //there is no need to use atomic operations since if multiple
-                // threads try to access the memory location they all write 1
-                active_domains_dev[i] = 1;
-                found = true;
-            }
-        }
     }
 }
 

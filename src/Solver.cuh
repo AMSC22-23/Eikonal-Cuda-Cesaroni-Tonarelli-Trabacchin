@@ -22,12 +22,7 @@ constexpr int NUM_THREADS = 1024;
 constexpr int SIZE_WARP = 32;
 
 
-template <int N>
-struct map_N_to_0 : std::unary_function<int, int> {
-    __host__ __device__ int operator()(int i) {
-        return (i==N) ? 0 : i;
-    }
-};
+
 
 
 template <int D,typename Float>
@@ -53,10 +48,6 @@ public:
     void gpuDataTransfer(){
         //printf("GPU data transfer started\n");
         // Allocate memory in device
-        cudaMalloc(&active_domains_dev, sizeof(int) * mesh->getPartitionsNumber());
-        cudaMemset(active_domains_dev,0,sizeof(int) * mesh->getPartitionsNumber());
-        cudaMalloc(&partitions_vertices_dev, sizeof(int) * mesh->getPartitionsNumber());
-        cudaMalloc(&partitions_tetra_dev, sizeof(int) * mesh->getPartitionsNumber());
         cudaMalloc(&geo_dev, sizeof(Float) * mesh->getNumberVertices() * D);
         cudaMalloc(&tetra_dev, sizeof(int) * mesh->get_tetra().size());
         cudaMalloc(&shapes_dev, sizeof(TetraConfig) * mesh->getShapes().size());
@@ -64,14 +55,11 @@ public:
         cudaMalloc(&M_dev, sizeof(Float) * mesh->get_M().size());
         cudaMalloc(&solutions_dev, sizeof(Float) * mesh->getNumberVertices());
         // Copy data from host to device
-        cudaMemcpy(partitions_vertices_dev, mesh->getPartitionVertices().data(), sizeof(int) * mesh->getPartitionsNumber(), cudaMemcpyHostToDevice);
-        cudaMemcpy(partitions_tetra_dev, mesh->getPartitionTetra().data(), sizeof(int) * mesh->getPartitionsNumber(), cudaMemcpyHostToDevice);
         cudaMemcpy(geo_dev, mesh->getGeo().data(), sizeof(Float) * mesh->getNumberVertices() * D, cudaMemcpyHostToDevice);
         cudaMemcpy(tetra_dev, mesh->get_tetra().data(), sizeof(int) * mesh->get_tetra().size(), cudaMemcpyHostToDevice);
         cudaMemcpy(shapes_dev, mesh->getShapes().data(), sizeof(TetraConfig) * mesh->getShapes().size(), cudaMemcpyHostToDevice);
         cudaMemcpy(ngh_dev, mesh->get_ngh().data(), sizeof(int) * mesh->get_ngh().size(), cudaMemcpyHostToDevice);
         cudaMemcpy(M_dev, mesh->get_M().data(), sizeof(Float) * mesh->get_M().size(), cudaMemcpyHostToDevice);
-        //printf("GPU data transfer completed\n");
     }
 
     //note: PartitionsVertices is an array such that (assuming vertices are clustered according to their subdomain, i.e. )
@@ -89,27 +77,24 @@ public:
 
         std::vector<cudaStream_t> streams;
         streams.resize(mesh->getPartitionsNumber());
-        int* active_domains;
-        active_domains = (int*)malloc(sizeof(int) * mesh->getPartitionsNumber());
         std::vector<thrust::host_vector<int>> active_lists(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<int>> sAddrs(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<int>> cLists(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<int>> active_lists_dev(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<int>> nbhNrs(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<TetraConfig>> elemLists(mesh->getPartitionsNumber());
-        //std::vector<thrust::device_vector<int>> s(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<int>> predicate(mesh->getPartitionsNumber());
         thrust::device_vector<size_t> elemListSizes(mesh->getPartitionsNumber());
 
 
         for(int i = 0; i < mesh->getPartitionsNumber(); i++) {
             size_t vec_size = getDomainSize(i);
-            sAddrs[i] = thrust::device_vector<int>(vec_size);//shorter
-            cLists[i] = thrust::device_vector<int>(vec_size);//shorter
-            nbhNrs[i] = thrust::device_vector<int>(vec_size);//shorter
-            active_lists_dev[i] = thrust::device_vector<int>(vec_size);//shorter
-            predicate[i] = thrust::device_vector<int>(mesh->getNumberVertices(), 0);//long
-            elemLists[i] = thrust::device_vector<TetraConfig>(getTetraNumberinDomain(i));//shorter
+            sAddrs[i] = thrust::device_vector<int>(vec_size);
+            cLists[i] = thrust::device_vector<int>(vec_size);
+            nbhNrs[i] = thrust::device_vector<int>(vec_size);
+            active_lists_dev[i] = thrust::device_vector<int>(vec_size);
+            predicate[i] = thrust::device_vector<int>(mesh->getNumberVertices(), 0);
+            elemLists[i] = thrust::device_vector<TetraConfig>(getTetraNumberinDomain(i));
             active_lists[i] = thrust::host_vector<int>(vec_size, 0);
         }
 
@@ -120,19 +105,13 @@ public:
             cudaStreamCreate(&streams[i]);
         }
 
-        thrust::plus<int> binary_op;
-        map_N_to_0<2> unary_op;
 
-        int cont = 0;
-        int inner_cont = 0;
         bool not_converged = true;
         Float* solutions = (Float*)malloc(sizeof(Float) * mesh->getNumberVertices());
 
         while(not_converged) {
-            cont++;
             not_converged = false;
             #pragma omp parallel for num_threads(mesh->getPartitionsNumber()) nowait
-            //std::cout << "-----------------------------" << std::endl;
             for(int domain = 0; domain < mesh->getPartitionsNumber(); domain++) {
                 size_t domain_size = getDomainSize(domain);
                 size_t begin_domain = getBeginDomain(domain);
@@ -144,9 +123,8 @@ public:
                     not_converged = true;
                 }
                 while(active_nodes > 0) {
-                    inner_cont++;
                     // we perform exclusive scan and result will be stored in sAddrs
-                    thrust::transform_exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), sAddrs[domain].begin(), unary_op, 0, binary_op);  //sAddrs may be shorter
+                    thrust::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), sAddrs[domain].begin());//, unary_op, 0, binary_op);  //sAddrs may be shorter
                     // we perform gather and store in cLists, which will be the compact active list
                     compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size ,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
                     // we count the total number of neighbouring tetrahedra for each node in the list
@@ -201,7 +179,6 @@ public:
             cudaStreamDestroy(streams[i]);
         }
         // free host memory
-        delete active_domains;
         delete solutions;
 
 
@@ -216,15 +193,12 @@ public:
 
 private:
     Mesh<D, Float>* mesh;
-    int* partitions_vertices_dev;
-    int* partitions_tetra_dev;
     Float* geo_dev;
     int* tetra_dev;
     TetraConfig* shapes_dev;
     int* ngh_dev;
     Float* M_dev;
     Float* solutions_dev;
-    int* active_domains_dev;
 
     void setup(std::vector<int>& source_nodes, Float infinity_value, std::vector<thrust::host_vector<int>>& active_lists, std::vector<thrust::device_vector<int>>& active_lists_dev){
         int* source_nodes_dev;
@@ -234,8 +208,7 @@ private:
         setSolutionsToInfinity<<<NUM_THREADS, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
         cudaDeviceSynchronize();
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
-        cudaMemset(active_domains_dev, 0, sizeof(int) * mesh->getPartitionsNumber());
-        setSolutionsSourcesAndDomains<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, active_domains_dev, partitions_vertices_dev, mesh->getPartitionsNumber(), source_nodes.size());
+        setSolutionsSources<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, source_nodes.size());
         cudaCheck("domain cuda set");
         cudaDeviceSynchronize();
         cudaFree(source_nodes_dev);
@@ -247,7 +220,6 @@ private:
                     if(v != source) {
                         int domain = getDomain(v);
                         active_lists[domain][v - getBeginDomain(domain)] = 1;
-                        //std::cout << "setting source at " << v << std::endl;
                     }
 
                 }
