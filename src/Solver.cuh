@@ -117,6 +117,7 @@ public:
                 size_t begin_domain = getBeginDomain(domain);
                 size_t end_domain = begin_domain + domain_size;
                 int numBlocks = domain_size / NUM_THREADS + 1;
+                // we count the number of active nodes (value set to 1 in active_list)
                 int active_nodes = thrust::count(thrust::cuda::par.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), 1);
                 
                 if(active_nodes != 0) {
@@ -125,22 +126,27 @@ public:
                 while(active_nodes > 0) {
                     // we perform exclusive scan and result will be stored in sAddrs
                     thrust::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), sAddrs[domain].begin());//, unary_op, 0, binary_op);  //sAddrs may be shorter
-                    // we perform gather and store in cLists, which will be the compact active list
+                    // we perform compact and store in cLists, which will be the compact active list
                     compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size ,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
-                    // we count the total number of neighbouring tetrahedra for each node in the list
+                    // we count the total number of neighbouring tetrahedra for each node in the list and store in nbhNrs
                     count_Nbhs<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(cLists[domain].data()), ngh_dev, thrust::raw_pointer_cast(nbhNrs[domain].data()), active_nodes, mesh->getNumberVertices() ,mesh->getShapes().size());
                     // we perform exclusive scan to get the addresses and store in aAddrs
                     thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), nbhNrs[domain].begin(), nbhNrs[domain].begin() + active_nodes, sAddrs[domain].begin());
                     // we perform a gather and store all the neighbouring tetrahedra for each node in cLists in elemLists, based on the address generated in previous line
                     gather_elements<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(cLists[domain].data()), thrust::raw_pointer_cast(nbhNrs[domain].data()),
                                                                                     thrust::raw_pointer_cast(elemLists[domain].data()), active_nodes, thrust::raw_pointer_cast(&elemListSizes[domain]), ngh_dev, shapes_dev);
-
+                    // construct predicate
                     constructPredicate<D, Float><<<active_nodes, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()), thrust::raw_pointer_cast(&elemListSizes[domain]), active_nodes, thrust::raw_pointer_cast(sAddrs[domain].data()), tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(predicate[domain].data()), M_dev, tol, thrust::raw_pointer_cast(active_lists_dev[domain].data()), begin_domain, domain_size);
-                    int active_neighbors_node = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 1);//count of the current domain activated nodes, other will be processed by other domains in a successive iteration
+                    //count of the current domain activated nodes, other will be processed by other domains in a successive iteration
+                    int active_neighbors_node = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 1);
                     if(active_neighbors_node != 0) {
+                        // we perform exclusive scan on predicate[domain] and store the result in sAddrs
                         thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, sAddrs[domain].begin());
+                        // compact and store in cLists
                         compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(predicate[domain].data()) + begin_domain, domain_size,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
+                        // count the number of neighbouring tetrahedra
                         count_Nbhs<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(cLists[domain].data()), ngh_dev, thrust::raw_pointer_cast(nbhNrs[domain].data()), active_neighbors_node, mesh->getNumberVertices() ,mesh->getShapes().size());
+                        // perform scan to get addresses to store in sAddrs
                         thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), nbhNrs[domain].begin(), nbhNrs[domain].begin() + active_neighbors_node, sAddrs[domain].begin());
                         gather_elements<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(cLists[domain].data()), thrust::raw_pointer_cast(nbhNrs[domain].data()),
                                                                                     thrust::raw_pointer_cast(elemLists[domain].data()), active_neighbors_node, thrust::raw_pointer_cast(&elemListSizes[domain]), ngh_dev, shapes_dev);
@@ -149,6 +155,7 @@ public:
 
                     removeConvergedNodes<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size);
                     active_nodes = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), 1);
+                    // set to 0 predicate[domain]
                     thrust::fill(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 0);
                 }
 
@@ -156,6 +163,7 @@ public:
 
             cudaDeviceSynchronize();
 
+            // propagate predicate
             for(int domain = 0; domain < mesh->getPartitionsNumber() && not_converged; domain++) {
                 size_t domain_size = getDomainSize(domain);
                 size_t begin_domain = getBeginDomain(domain);
@@ -170,8 +178,9 @@ public:
             cudaDeviceSynchronize();
         }
 
-        
+        // copy solutions back to host
         cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
+        // write solution to file
         mesh->getSolutionsVTK(output_file_name, solutions);
 
         // destroy streams
@@ -200,7 +209,10 @@ private:
     Float* M_dev;
     Float* solutions_dev;
 
+    // method used to set the solutions to infinity value, set to 0 the solutions on source nodes,
+    // and set to 1 the active nodes in active_list, then copy data from active_list to active_list_dev
     void setup(std::vector<int>& source_nodes, Float infinity_value, std::vector<thrust::host_vector<int>>& active_lists, std::vector<thrust::device_vector<int>>& active_lists_dev){
+        // we initialize the vector of solutions to infinity value, and set to 0 the solution on source nodes
         int* source_nodes_dev;
         cudaMalloc(&source_nodes_dev, sizeof(int) * source_nodes.size());
         cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMemcpyHostToDevice);
@@ -218,6 +230,7 @@ private:
                 for(int j = 0; j < D +1; j++) {
                     int v = mesh->get_tetra()[(D+1)*mesh->getShapes()[i].tetra_index + j];
                     if(v != source) {
+                        // if the node is not a source node, we set in the corresponding position in active_list value= 1
                         int domain = getDomain(v);
                         active_lists[domain][v - getBeginDomain(domain)] = 1;
                     }
@@ -226,13 +239,14 @@ private:
             }
         }
 
-
+        // copy from active_list to active_list_dev
         for(int i = 0; i < active_lists.size(); i++) {
             active_lists_dev[i] = active_lists[i];
         }
 
     }
 
+    // method, that provided a vertex (index) returns the domain it belongs to
     int getDomain(int vertex_index) {
         for(int i = 0; i < mesh->getPartitionsNumber(); i++) {
             if(vertex_index < mesh->getPartitionVertices()[i]) {
