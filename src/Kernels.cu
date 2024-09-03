@@ -175,6 +175,7 @@ __global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* e
 
 
 //number of blocks is assumed to be precise
+// elemList contains neighbouring tetrahedra of each node in active list (cList)
 template <int D, typename Float>
 __global__ void constructPredicate(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin, int domain_size) {
 

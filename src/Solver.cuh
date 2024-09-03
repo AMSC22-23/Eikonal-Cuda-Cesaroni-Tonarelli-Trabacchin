@@ -37,7 +37,7 @@ public:
         gpuDataTransfer();
     }
 
-
+    // error handling
     static void cudaCheck(std::string mess) {
         cudaDeviceSynchronize();
         cudaError_t err = cudaGetLastError();
@@ -49,6 +49,7 @@ public:
         }
     }
 
+    // we transfer the necessary data from host to device
     void gpuDataTransfer(){
         //printf("GPU data transfer started\n");
         // Allocate memory in device
@@ -75,15 +76,16 @@ public:
 
     //note: PartitionsVertices is an array such that (assuming vertices are clustered according to their subdomain, i.e. )
     //1)length(PartitionsVertices) == number of subdomains in the mesh
-    //2)PartitionsVertices[i] == k <==> vertices from PartitionsVertices[i-1](inclusive) to PartitionsVertices[i](exclusive) belong to subdomains i. If i==0, then PartitionsVertices[-1] is assumed to be equals to 0, Moreover PartitionsVertices[i], with 0 <= i < mesh->getPartitionsNumber() - 1, is the index of the first node belonging to sudomain i+1
+    //2)PartitionsVertices[i] == k <==> vertices from PartitionsVertices[i-1](inclusive)
+    // to PartitionsVertices[i](exclusive) belong to subdomains i. If i==0,
+    // then PartitionsVertices[-1] is assumed to be equals to 0, Moreover PartitionsVertices[i],
+    // with 0 <= i < mesh->getPartitionsNumber() - 1, is the index of the first node belonging to subdomain i+1
+
     void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
 
         using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
         using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
         using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
-
-        //std::cout << "domain 1 begin = " << mesh->getPartitionVertices()[0] << " end =" << mesh->getPartitionVertices()[1] << std::endl;
-
 
         std::vector<cudaStream_t> streams;
         streams.resize(mesh->getPartitionsNumber());
@@ -143,12 +145,18 @@ public:
                 }
                 while(active_nodes > 0) {
                     inner_cont++;
+                    // we perform exclusive scan and result will be stored in sAddrs
                     thrust::transform_exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), sAddrs[domain].begin(), unary_op, 0, binary_op);  //sAddrs may be shorter
+                    // we perform gather and store in cLists, which will be the compact active list
                     compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size ,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
+                    // we count the total number of neighbouring tetrahedra for each node in the list
                     count_Nbhs<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(cLists[domain].data()), ngh_dev, thrust::raw_pointer_cast(nbhNrs[domain].data()), active_nodes, mesh->getNumberVertices() ,mesh->getShapes().size());
+                    // we perform exclusive scan to get the addresses and store in aAddrs
                     thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), nbhNrs[domain].begin(), nbhNrs[domain].begin() + active_nodes, sAddrs[domain].begin());
+                    // we perform a gather and store all the neighbouring tetrahedra for each node in cLists in elemLists, based on the address generated in previous line
                     gather_elements<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(cLists[domain].data()), thrust::raw_pointer_cast(nbhNrs[domain].data()),
                                                                                     thrust::raw_pointer_cast(elemLists[domain].data()), active_nodes, thrust::raw_pointer_cast(&elemListSizes[domain]), ngh_dev, shapes_dev);
+
                     constructPredicate<D, Float><<<active_nodes, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()), thrust::raw_pointer_cast(&elemListSizes[domain]), active_nodes, thrust::raw_pointer_cast(sAddrs[domain].data()), tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(predicate[domain].data()), M_dev, tol, thrust::raw_pointer_cast(active_lists_dev[domain].data()), begin_domain, domain_size);
                     thrust::async::exclusive_scan(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, sAddrs[domain].begin());
                     compact<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(sAddrs[domain].data()), thrust::raw_pointer_cast(predicate[domain].data()) + begin_domain, domain_size,thrust::raw_pointer_cast(cLists[domain].data()), begin_domain);
