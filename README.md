@@ -54,12 +54,13 @@ the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overvie
 ```bash
 $ ./install_dependences.sh
 ```
-
+Moreover, Eigen should be already installed, and its location should be provided when configuring the project.
+If no location is provided, a default one will be attempted.
 Then, to build the executable, from the root folder run the following commands:
 ```bash
 $ mkdir build
 $ cd build
-$ cmake ..
+$ cmake .. -DEIGEN_DIR=<EigenLocation>
 $ make
 ```
 An executable for the test will be created into `/build`, and can be executed through:
