@@ -16,12 +16,22 @@
 #include <cstdlib>
 #include <cstdio>
 #include "../src/CudaEikonalTraits.cuh"
+#define IDXTYPEWIDTH 32
+#define REALTYPEWIDTH 64
+#include "../lib/METIS/include/metis.h"
 
+// struct storing the index associated to the tetrahedron and
+// its configuration (we have 4 possible configurations)
 struct TetraConfig {
     int tetra_index;
     int tetra_config;
 };
 
+// The class encapsulates all the geometric information about the domain and has 2 constructors:
+// - The first constructor reads the matrices associated with each tetrahedron from a file.
+//   It takes as parameters the mesh file path, the number of partitions into which the subdomain is divided,
+//   and the matrix file path.
+// - The second constructor initializes all the matrices to the same value, with the matrix provided as a constructor parameter
 
 template <int D, typename Float>
 class Mesh {
@@ -32,11 +42,14 @@ public:
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
 
     Mesh(const std::string& mesh_file_path, int nparts, const std::string& matrix_file_path) : partitions_number(nparts){
+        // we read the mesh from file and store the tetrahedra in sets, each set element represents a tetrahedron
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
-        std::cout << "init_mesh completed" << std::endl;
+        
+    
         tetra.resize(sets.size() * (D+1));
         int i = 0;
         for(auto &t : sets) {
+            if(t.size() != D+1) continue;
             int j = 0;
             for(auto &v : t) {
                 tetra[i+j] = v;
@@ -45,8 +58,10 @@ public:
             i += D+1;
         }
 
+        // we read the matrices from file and store them in a vector of matrices
         std::vector<Matrix> tempM = readMatrices(matrix_file_path);
-        execute_metis(tempM);
+        // perform the partition with Metis providing the vector of matrices
+        execute_metis_api(tempM);
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -55,6 +70,7 @@ public:
                 g[tetra[j+i]].push_back(i/(D+1));
             }
         }
+
 
         ngh.resize(getNumberVertices());
         ngh[0] = 0;
@@ -65,7 +81,6 @@ public:
         }
         cont += g[ngh.size()-1].size();
         shapes.resize(cont);
-        std::cout << "actual shapes size " << cont << std::endl;
         cont = 0;
 
         for(i = 0; i < g.size(); i++) {
@@ -80,30 +95,12 @@ public:
                 cont++;
             }
         }
-
-        std::cout << "after shapes size " << cont << std::endl;
-
-
-        /*
-        for(auto &x : g) {
-            for(auto &y : x) {
-                shapes[cont] = y;
-                cont++;
-            }
-        }
-         */
-
-        /*indices.resize(getNumberVertices());
-        for(int i = 0; i < getNumberVertices(); i++){
-            indices[i] = neighbors.size();
-            std::vector<int> n = getNeighbors(i);
-            neighbors.insert(neighbors.end(), n.begin(), n.end());
-        }*/
     }
 
-    Mesh(const std::string& mesh_file_path, int nparts, Matrix velocity) : partitions_number(nparts){
+    Mesh(const std::string& mesh_file_path, int nparts, const Matrix& velocity) : partitions_number(nparts){
+        // sets contains the tetrahedra. Each set element represents a tetrahedron
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
-        std::cout << "init_mesh completed" << std::endl;
+        // tetra is filled with the indices of the vertices that form the tetrahedron
         tetra.resize(sets.size() * (D+1));
         unsigned int i = 0;
         for(auto &t : sets) {
@@ -116,12 +113,18 @@ public:
         }
 
         std::vector<Matrix> tempM;
+        // we have a matrix associated to each tetrahedron
         tempM.resize(tetra.size()/(D+1));
+
+
+
         for(i = 0; i < tetra.size() / (D + 1); i++){
+            // We initialize each matrix using the one provided as a constructor parameter.
             tempM[i] = velocity;
         }
-        std::cout<<"tetra" << std::endl;
-        execute_metis(tempM);
+        // we perform the partitioning providing the vector of matrices to the method
+        execute_metis_api(tempM);
+
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -140,68 +143,85 @@ public:
         }
         cont += g[ngh.size()-1].size();
         shapes.resize(cont);
-        std::cout << "actual shapes size " << cont << std::endl;
 
         cont = 0;
+
 
         for(i = 0; i < g.size(); i++) {
             for(int j = 0; j < g[i].size(); j++) {
                 shapes[cont].tetra_index = g[i][j];
                 int tetra_to_search = g[i][j];
-                bool sanity_check = false;
                 for(int k = 0; k < 4; k++) {
                     if(tetra[4 * tetra_to_search + k] == i) {
                         shapes[cont].tetra_config = k + 1;
-                        sanity_check = true;
                     }
                 }
-                if(!sanity_check) {
-                    std::cout << "sanity error" << std::endl;
-                }
                 cont++;
             }
         }
 
-        std::cout << "after shapes size " << cont << std::endl;
-
-
-        for(int i = 0; i < shapes.size(); i++) {
-            if(shapes[i].tetra_config<1||shapes[i].tetra_config>4) {
-                std::cout << "error with shapes" << std::endl;
-            }
-        }
-
-
-
-        /*
-        for(auto &x : g) {
-            for(auto &y : x) {
-                shapes[cont] = y;
-                cont++;
-            }
-        }
-         */
-
-        /*indices.resize(getNumberVertices());
-        for(int i = 0; i < getNumberVertices(); i++){
-            indices[i] = neighbors.size();
-            std::vector<int> n = getNeighbors(i);
-            neighbors.insert(neighbors.end(), n.begin(), n.end());
-        }*/
     }
 
 
-    void execute_metis(std::vector<Matrix> tempM) {
-        print_file_metis();
-        int ret_code = system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number)).c_str());
-        if(ret_code!=0) {
-            exit(ret_code);
-        }
-        std::vector<int> parts = read_metis_vertices_output();
-        reorderPartitions(parts);
-        parts = read_metis_tetra_output();
-        reorderTetra(parts, tempM);
+    void execute_metis_api(const std::vector<Matrix>& tempM) {
+        if(partitions_number > 1) {
+            idx_t tetra_number = tetra.size()/(D+1);
+            idx_t vertices_number = geo.size()/D;
+            idx_t objval;
+            std::vector<idx_t> elements_subdivision;
+            elements_subdivision.resize(tetra_number + 1);
+            for(int i = 0; i < tetra_number+1; i++) {
+                elements_subdivision[i] = 4*i;
+            }
+            std::vector<idx_t> parts_vertices;
+            parts_vertices.resize(vertices_number);
+            std::vector<idx_t> parts_tetra;
+            parts_tetra.resize(tetra_number);
+            idx_t ncomm = 3;
+            idx_t metis_result = METIS_PartMeshDual(&tetra_number, &vertices_number, elements_subdivision.data() , tetra.data(), 0, 0, &ncomm, &partitions_number, 0, 0, &objval, parts_tetra.data(), parts_vertices.data());
+            if(metis_result != METIS_OK) {
+                std::cout << metis_result << std::endl;
+                exit(-1);
+            }
 
+            reorderPartitions(parts_vertices);
+            reorderTetra(parts_tetra, tempM);
+        } else {
+            std::vector<int> parts(getNumberVertices(), 0);
+            reorderPartitions(parts);
+            parts = std::vector<int>(getNumberTetra(), 0);
+            reorderTetra(parts, tempM);
+        }
+    }
+
+
+    void execute_metis(const std::vector<Matrix>& tempM) {
+        if(partitions_number > 1) {
+            // we generate the input file for metis
+            print_file_metis();
+            // we execute the METIS command-line tool
+            int ret_code = system(("../lib/METIS/build/programs/mpmetis metis_input.txt  -contig  -ncommon=3  " + std::to_string(partitions_number) + " > /dev/null").c_str());
+            // we check the return code
+            if(ret_code!=0) {
+                exit(ret_code);
+            }
+            // we read the partitioning results for vertices from METIS
+            std::vector<int> parts = read_metis_vertices_output();
+            // we reorder the vertices according to the partitions they belong to
+            // (geo will be reordered)
+            reorderPartitions(parts);
+            // we read the partitioning results for tetrahedra from METIS
+            parts = read_metis_tetra_output();
+            // we reorder the tetrahedra according to the partition they belong to
+            // (tetra will be reordered)
+            reorderTetra(parts, tempM);
+        } else {
+            // in this case the domain is not partitioned into subdomains
+            std::vector<int> parts(getNumberVertices(), 0);
+            reorderPartitions(parts);
+            parts = std::vector<int>(getNumberTetra(), 0);
+            reorderTetra(parts, tempM);
+        }
     }
 
     std::string toString() {
@@ -223,35 +243,39 @@ public:
         return res;
     }
 
+    // method returns the total number of vertices
     int getNumberVertices() const {
         return geo.size() / D;
     };
 
-    int getVerticesPerShape() const {
+
+    /*int getVerticesPerShape() const {
         return vertices_per_shape;
-    }
+    }*/
 
+    // method returns the total number of tetrahedra
     int getNumberTetra() const{
-        return tetra.size() / 4;
+        return tetra.size() / (D+1);
     }
 
-    std::vector<int> getNeighbors(size_t vertex) const {
+    /*std::vector<int> getNeighbors(size_t vertex) const {
         std::set<int> n;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
             n.insert(shapes[i].tetra_index);
         }
         std::vector<int> res(n.begin(), n.end());
         return res;
-    }
+    }*/
 
-    std::vector<int> getShapes(size_t vertex) const {
+    /*std::vector<int> getShapes(size_t vertex) const {
         std::vector<int> shapes_v;
         for(size_t i = ngh[vertex]; i < (vertex != ngh.size() -1 ? ngh[vertex + 1] : shapes.size()); i++){
             shapes_v.emplace_back(shapes[i]);
         }
         return shapes_v;
-    }
+    }*/
 
+    // method that provided a vertex (index) returns its coordinates
     template<typename V>
     V getCoordinates(int vertex) const{
         V coord;
@@ -282,19 +306,19 @@ public:
         return partitions_number;
     }
 
-    std::vector<int>& getPartitionVertices() {
+    const std::vector<int>& getPartitionVertices() const{
         return partitions_vertices;
     }
 
-    std::vector<int>& getPartitionTetra() {
+    const std::vector<int>& getPartitionTetra() const{
         return partitions_tetrahedra;
     }
 
-    std::vector<Float>& getGeo() {
+    const std::vector<Float>& getGeo() const {
         return geo;
     }
 
-    std::vector<TetraConfig>& getShapes() {
+    const std::vector<TetraConfig>& getShapes() const {
         return shapes;
     }
 
@@ -311,33 +335,21 @@ public:
         return min_vertex;
     }
 
-    /*const std::vector<int>& getVectorNeighbors() const{
-        return neighbors;
-    }
 
-    const std::vector<int>& getVectorNeighborsIndices() const{
-        return indices;
-    }*/
 
     void print_file_metis(){
         std::ofstream output_file("metis_input.txt");
-
+        // number of tetrahedra
         output_file << tetra.size()/(D+1) << std::endl;
 
         for(int i = 0; i < tetra.size(); i += D+1) {
             for(int j = 0; j < D+1; j++) {
+                // METIS uses 1-based indexing for enumerating
                 output_file << tetra[i+j] + 1 << " ";
             }
             output_file << std::endl;
         }
-        /*
-        for(auto &s : element_set) {
-            for(auto &x : s) {
-                output_file << x+1 << " ";
-            }
-            output_file << std::endl;
-        }
-         */
+        
         output_file.close();
     }
 
@@ -365,8 +377,6 @@ public:
         std::ofstream output_file(output_file_name);
         if(!output_file.is_open()) {
             std::cout << "output file not opened " << output_file_name << std::endl;
-        } else {
-            std::cout << "output file path: " << output_file_name << std::endl;
         }
         //header
         output_file << "# vtk DataFile Version 3.0\n" <<
@@ -384,9 +394,7 @@ public:
         output_file << "\n";
 
         //  cells
-        /*auto [num_shapes, str] = getStringMeshShapes();
-        output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
-        output_file << str << std::endl;*/
+    
         int num_shapes = tetra.size()/(D+1);
         output_file << "CELLS        " << num_shapes << " " << num_shapes * 5 << std::endl;
 
@@ -397,17 +405,6 @@ public:
             }
             output_file << std::endl;
         }
-
-
-
-        /*for(auto x: s){
-            output_file << D+1 << "  ";
-            for(auto y: x){
-                output_file << "  " << y;
-            }
-            output_file << std::endl;
-        }
-         */
 
         // cell_types
         int n = 10;
@@ -429,7 +426,6 @@ public:
 
         output_file.flush();
         output_file.close();
-        std::cout << "writing finished" << std::endl;
     }
 
     const std::vector<int>& get_tetra() const{
@@ -451,7 +447,7 @@ public:
 
 protected:
 
-
+// method that, provided the coordinates of 2 nodes, returns the distance
     Float getDistance(std::array<Float, D> c1, std::array<Float, D> c2) const {
         Float res = 0;
         for(int i = 0; i < D; i++){
@@ -461,28 +457,30 @@ protected:
         return res;
     }
 
+    // we reorder the tetrahedra according to the partition they belong to
     void reorderTetra(std::vector<int> partitions_vector, std::vector<Matrix> tempM){
 
-        partitions_tetrahedra.resize(partitions_number);
+        //partitions_tetrahedra.resize(partitions_number);
         std::vector<int> pos;
         pos.resize(partitions_vector.size());
         std::iota(pos.begin(), pos.end(),0);
         std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return partitions_vector[i] < partitions_vector[j];});
-        std::vector<Float> reordered_tetra;
+        std::vector<int> reordered_tetra;
         reordered_tetra.resize(tetra.size());
-        partitions_tetrahedra.push_back(0);
+        //partitions_tetrahedra.push_back(0);
+        // The matrix is symmetric so we can store only 6 Floats for each tetrahedron
         M.resize(6*pos.size());
         for(int i = 0; i < pos.size(); i++){
-            if(i!=0 && partitions_vector[pos[i]]!= partitions_vector[pos[i-1]]){
+            /*if(i!=0 && partitions_vector[pos[i]]!= partitions_vector[pos[i-1]]){
                 partitions_tetrahedra.push_back(4*i);
-            }
+            }*/
             for(int j=0; j<D+1; j++){
                 reordered_tetra[4*i+j] = tetra[4*pos[i]+j];
             }
-            VectorExt x1 = getCoordinates<VectorExt>(tetra[4*i]);
-            VectorExt x2 = getCoordinates<VectorExt>(tetra[4*i+1]);
-            VectorExt x3 = getCoordinates<VectorExt>(tetra[4*i+2]);
-            VectorExt x4 = getCoordinates<VectorExt>(tetra[4*i+3]);
+            VectorExt x1 = getCoordinates<VectorExt>(tetra[4*pos[i]]);
+            VectorExt x2 = getCoordinates<VectorExt>(tetra[4*pos[i]+1]);
+            VectorExt x3 = getCoordinates<VectorExt>(tetra[4*pos[i]+2]);
+            VectorExt x4 = getCoordinates<VectorExt>(tetra[4*pos[i]+3]);
             VectorExt e12 = x2+(-x1);
             VectorExt e13 = x3+(-x1);
             VectorExt e23 = x3+(-x2);
@@ -496,14 +494,19 @@ protected:
             M[i * 6 + 4] = e24.transpose() * (tempM[pos[i]] * e24);
             M[i * 6 + 5] = e34.transpose() * (tempM[pos[i]] * e34);
         }
+        tetra = reordered_tetra;
     }
 
+// we provide to the method a vector of integers where each entry represents the partition assignment of a vertex.
+// For example, if partitions_vector[i] = 2, then the i-th vertex belongs to partition 2.
     void reorderPartitions(std::vector<int> partitions_vector) {
         partitions_vertices.resize(partitions_number);
         std::vector<int> map_vertices;
         std::vector<int> pos;
         pos.resize(partitions_vector.size());
         std::iota(pos.begin(), pos.end(),0);
+        // we sort the vertices based on the partition assignments,
+        // grouping vertices in their partition assignment
         std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return partitions_vector[i] < partitions_vector[j];});
         size_t current_index = 0;
         size_t prec;
@@ -511,16 +514,15 @@ protected:
         std::vector<Float> reordered_geo;
         reordered_geo.resize(0);
         map_vertices.resize(geo.size() / D);
-        //std::vector<int> reordered_shapes(shapes.size());
-        //std::vector<int> reordered_ngh(ngh.size());
         int cont_partitions = 0;
-        //reordered_ngh[0] = 0;
+        // we map each original vertex index to its new index after sorting
         for(int i = 0; i < pos.size(); i++) {
             map_vertices[pos[i]] = i;
         }
         while(current_index < pos.size()){
             prec = current_index;
             current_index++;
+            // we store in same vertices belonging to the same partition
             same.push_back(pos[prec]);
             while(true){
                 if( current_index < pos.size() && partitions_vector[pos[prec]] == partitions_vector[pos[current_index]]){
@@ -530,21 +532,10 @@ protected:
                     partitions_vertices[cont_partitions] = current_index;
                     cont_partitions++;
                     for(int j : same){
-                        //map_vertices[j] = (int)reordered_geo.size() / D;
+                        // the reordered coordinates are stored in reordered_geo
                         for(int i = 0; i < D; i++) {
                             reordered_geo.push_back(geo[j*D+i]);
                         }
-                        /*
-                        int begin = ngh[j];
-                        int end = (j != ngh.size() - 1) ? ngh[j + 1] : shapes.size();
-                        reordered_ngh[cont_ngh] = cont_shapes;
-                        for(int i = begin; i < end; i++) {
-                            reordered_shapes[cont_shapes] = map_vertices[shapes[i]];
-                            cont_shapes++;
-                        }
-
-                        cont_ngh++;
-                        */
                     }
 
                     break;
@@ -558,24 +549,28 @@ protected:
         }
 
         geo = reordered_geo;
-        //shapes = reordered_shapes;
-        //ngh = reordered_ngh;
-
 
     }
 
+    // method to remove duplicated vertices from geo, it returns a vector storing the mapping
     std::vector<int> removeDuplicateVertices(){
+        // Vector that will store the mapping of old vertex indices to new indices in the reduced set.
         std::vector<int> map_vertices;
         std::vector<int> pos;
+        // size is equal to the number of vertices
         pos.resize(geo.size()/D);
         std::iota(pos.begin(), pos.end(),0);
+        // The indices are sorted based on the verticesCompare function
         std::sort(pos.begin(), pos.end(), [&](std::size_t i, std::size_t j) { return verticesCompare(i,j) == 1; });
 
         size_t current_index = 0;
         size_t prec;
+        // same will store the indices of duplicated vertices
         std::vector<int> same;
+        // reduced_geo stores the indices of all the vertices without duplicates
         std::vector<Float> reduced_geo;
         reduced_geo.resize(0);
+        // map_vertices has the size of the original number of vertices
         map_vertices.resize(geo.size() / D);
 
         while(current_index < pos.size()){
@@ -583,6 +578,7 @@ protected:
             current_index++;
             same.push_back(pos[prec]);
             while(true){
+                // verticesCompare returns 0 if two vertices are equal
                 if( current_index < pos.size() && verticesCompare(pos[prec], pos[current_index]) == 0){
                     same.push_back(pos[current_index]);
                     current_index++;
@@ -602,6 +598,7 @@ protected:
         return map_vertices;
     }
 
+    // This function is used to determine the order of vertices
     int verticesCompare(int i, int j) const {
         for(int k = 0; k < D; k++){
             if(geo[D * i + k] < geo[D * j + k]){
@@ -613,10 +610,14 @@ protected:
         return 0;
     }
 
+
+    // This method is responsible for reading a set of matrices from a file
+    // and storing them in a vector of Matrix objects
     std::vector<Matrix> readMatrices(const std::string& matrix_file_path){
         std::ifstream matrix_file (matrix_file_path);
         std::vector<Matrix> matrices;
         if(matrix_file.is_open()){
+            // a matrix for each tetrahedron
             matrices.resize(tetra.size()/4);
             std::string buffer;
             std::array<Float,6> n;
@@ -633,11 +634,13 @@ protected:
         return matrices;
     }
 
+    // method to read the mesh from file
     std::set<std::set<int>> init_mesh(const std::string& mesh_file_path, int vertices_per_shape_) {
         std::set<std::set<int>> sets;
         vertices_per_shape = vertices_per_shape_;
         std::ifstream mesh_file (mesh_file_path);
         if(mesh_file.is_open()) {
+            // we ignore the information that isn't relevant
             std::string buffer;
 
             std::getline(mesh_file, buffer);
@@ -649,6 +652,7 @@ protected:
             int vertices_number;
             mesh_file>>vertices_number;
             mesh_file>>buffer;
+            // we populate geo with the coordinates of each vertex
             geo.resize(vertices_number*D);
             int ignore;
             for(int i = 0; i < vertices_number; i++){
@@ -659,9 +663,11 @@ protected:
                 }
 
             }
+            // We remove vertices having the same coordinates and store
+            // the mapping from original vertex indices to their corresponding indices in the reduced set of vertices
             std::vector<int> map_vertices = removeDuplicateVertices();
 
-
+            // now geo contains coordinates of vertices without duplicates
             vertices_number = geo.size()/D;
             mesh_file>>buffer;
             int triangle_number;
@@ -670,13 +676,10 @@ protected:
             ngh.resize(vertices_number);
             int num;
             for(int i=0; i<triangle_number; i++){
-                int shape_type;
-                mesh_file>>shape_type;
-                if(shape_type != 4) {
-                    continue;
-                }
+                int element_type;
+                mesh_file>>element_type;
                 std::set<int> tmp;
-                for(int j=0; j<vertices_per_shape; j++){
+                for(int j=0; j<element_type; j++){
                     mesh_file>>num;
                     tmp.insert(map_vertices[num]);
                 }
@@ -688,24 +691,41 @@ protected:
         } else {
             std::cout << "Couldn't open mesh file." << std::endl;
         }
+        // sets will contain all the tetrahedra
         return sets;
     }
 
 
-    std::vector<Float> geo; // Coordinates of the vertices
-    std::vector<TetraConfig> shapes; // For each vertex, the shapes associated to it (contains only the other three vertices in the shape)
-    std::vector<int> tetra; // Tetrahedra
-    std::vector<int> ngh; // Defines the boundaries in shapes
-    int partitions_number; // Number of partitions
-    std::vector<Float> M; // vector of matrices, each matrix associated with a tetrahedron
+    // vector storing the coordinates of the vertices. It stores the x,y and z values for the first vertex,
+    // followed by the x,y and z values and so on.
+    std::vector<Float> geo;
+
+    // Vector that, for each vertex, stores the shapes associated to it
+    std::vector<TetraConfig> shapes;
+
+    // Vector storing tetrahedra : indices of the vertices in groups of 4 for each tetrahedron
+    std::vector<int> tetra;
+
+    // vector defining the boundaries in shapes
+    std::vector<int> ngh;
+
+    // number of subdomains
+    int partitions_number;
+
+    // vector of matrices, each matrix is associated to a tetrahedron
+    std::vector<Float> M;
 
 
     /*std::vector<int> neighbors;
     std::vector<int> indices; */
+
     int vertices_per_shape = 4;
 
-    std::vector<int> partitions_vertices; // Defines the boundaries of each partition in geo (i.e. defines the set of vertices in each partition)
-    std::vector<int> partitions_tetrahedra; // Defines the boundaries of each partition in tetra (i.e. defines the set of tetrahedra in each partition)
+    // vector defining the boundaries of each partition in geo (i.e. defines the set of vertices in each partition)
+    std::vector<int> partitions_vertices;
+
+    // vector defining the boundaries of each partition in tetra (i.e. defines the set of tetrahedra in each partition)
+    std::vector<int> partitions_tetrahedra;
 
 
 };
