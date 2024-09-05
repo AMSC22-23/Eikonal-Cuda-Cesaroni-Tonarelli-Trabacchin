@@ -134,6 +134,15 @@ public:
             }
         }
 
+        //check
+        int max = 0;
+        for(int i = 0; i < g.size(); i++) {
+            if(g[i].size() > max) {
+                max = g[i].size();
+            }
+        }
+        max_neighbour_tetra = max;
+
         ngh.resize(getNumberVertices());
         ngh[0] = 0;
         unsigned int cont = 0;
@@ -301,6 +310,10 @@ public:
 
     const std::vector<TetraConfig>& getShapes() const {
         return shapes;
+    }
+
+    const int get_maximum_neighbour_tetra() const {
+        return max_neighbour_tetra;
     }
 
     int getNearestVertex(std::array<Float, D> coordinates) const {
@@ -674,6 +687,10 @@ protected:
 
     // number of subdomains
     int partitions_number;
+
+    //maximum number of tetrahedra near a vertex
+    int max_neighbour_tetra;
+
 
     // vector of matrices, each matrix is associated to a tetrahedron
     std::vector<Float> M;
