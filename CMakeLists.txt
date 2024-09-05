@@ -12,6 +12,7 @@ include_directories(test)
 
 if(DEFINED EIGEN_DIR)
     include_directories(${EIGEN_DIR})
+    message(${EIGEN_DIR})
 else()
     include_directories("/u/sw/toolchains/gcc-glibc/11.2.0/pkgs/eigen/3.3.9/include/eigen3")
 endif()

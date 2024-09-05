@@ -58,7 +58,8 @@ Moreover, Eigen should be already installed, and its location should be provided
 If no location is provided, a default one will be attempted.
 Then, to build the executable, from the root folder run the following commands:
 ```bash
-$ mkdir build
+
+
 $ cd build
 $ cmake .. -DEIGEN_DIR=<EigenLocation>
 $ make
