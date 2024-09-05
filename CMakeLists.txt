@@ -24,7 +24,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lGKlib")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lmetis")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 link_directories(~/local/lib)
 link_directories(/usr/local/lib)
