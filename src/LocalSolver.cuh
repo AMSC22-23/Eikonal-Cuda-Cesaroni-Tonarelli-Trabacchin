@@ -173,7 +173,7 @@ public:
         k = phi1_phi1 * gamma3 - alpha3_alpha3;
 
         a_hat = d * b * b / (a * a) + e - f * b / a;
-        b_hat = 2 * b * c * d / (a * a) + f * c / a - b * g / a + h;
+        b_hat = 2 * b * c * d / (a * a) - f * c / a - b * g / a + h;
         c_hat = k + d * c * c / (a * a) - c * g / a;
 
         delta = std::sqrt(b_hat * b_hat - 4 * a_hat * c_hat);

@@ -16,11 +16,10 @@
 #include <cstdlib>
 #include <cstdio>
 #include <chrono>
-#include "../lib/METIS/include/metis.h"x
 #include "../src/CudaEikonalTraits.cuh"
 #define IDXTYPEWIDTH 32
 #define REALTYPEWIDTH 64
-
+#include "../lib/METIS/include/metis.h"
 
 // struct storing the index associated to the tetrahedron and
 // its configuration (we have 4 possible configurations)
@@ -165,7 +164,7 @@ public:
 
     void execute_metis_api(const std::vector<Matrix>& tempM) {
         if(partitions_number > 1) {
-            auto start2 = std::chrono::high_resolution_clock::now();
+            auto start1 = std::chrono::high_resolution_clock::now();
             idx_t tetra_number = tetra.size()/(D+1);
             idx_t vertices_number = geo.size()/D;
             idx_t objval;
@@ -184,7 +183,7 @@ public:
                 std::cout << metis_result << std::endl;
                 exit(-1);
             }
-            auto stop2 = std::chrono::high_resolution_clock::now();
+            auto stop1 = std::chrono::high_resolution_clock::now();
             std::cout << "Metis time (microseconds)= " <<
                   std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
             reorderPartitions(parts_vertices);
