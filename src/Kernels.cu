@@ -18,51 +18,40 @@ template <typename Float>
 __device__ Float atomicSwapIfLess(Float* address, Float value) {
     Float swap, old;
     swap = *address;
-
-
     do {
         if(swap <= value) {
             break;
         }
         old = swap;
-
-    }while((swap = atomicCAS(address, swap, value)) != old);
+    } while((swap = atomicCAS(address, swap, value)) != old);
     return swap;
-
 }
 
 template <>
 __device__ float atomicSwapIfLess(float* address, float value) {
     float swap, old;
     swap = *address;
-
-
     do {
         if(swap <= value) {
             break;
         }
         old = swap;
 
-    }while((swap = __uint_as_float(atomicCAS((unsigned int*)address, __float_as_uint(swap), __float_as_uint(value)))) != old);
+    } while((swap = __uint_as_float(atomicCAS((unsigned int*)address, __float_as_uint(swap), __float_as_uint(value)))) != old);
     return swap;
-
 }
 
 template <>
 __device__ double atomicSwapIfLess(double* address, double value) {
     double swap, old;
     swap = *address;
-
-
     do {
         if(swap <= value) {
             break;
         }
         old = swap;
-
-    }while((swap = __longlong_as_double(atomicCAS((unsigned long long int*)address, __double_as_longlong(swap), __double_as_longlong(value)))) != old);
+    } while((swap = __longlong_as_double(atomicCAS((unsigned long long int*)address, __double_as_longlong(swap), __double_as_longlong(value)))) != old);
     return swap;
-
 }
 
 // function to set solution_dev to infinity value
@@ -108,7 +97,6 @@ __global__ void setSolutionsSources(Float* solutions_dev, int* source_nodes_dev,
 // - index corresponding to where the domain starts
 __global__ void compact(int* map, int* predicate, size_t size, int* output, int domain_begin) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-
     if(tid < size) {
         if(predicate[tid] == 1) {
             output[map[tid]] = tid + domain_begin;
@@ -132,14 +120,6 @@ __global__ void count_Nbhs(int* cList, int* ngh, int* result, size_t active_node
     }
 }
 
-/*__global__ void count_Nbhs_vertices(int* cList, int* ngh, int* tetra, int* result, size_t active_nodes, size_t num_vertices, size_t shapes_size) {
-    unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if(tid < active_nodes) {
-        int temp = cList[tid];
-
-    }
-}*/
-
 //requires cList being an array of vertices indexes, with length up to active_nodes
 //requires nbhNr being the array st nbhNr[i] == number of near tetrahedra to cList[i], with length up to len(cList)
 //requires sAd to satisfy the same properties as map in kernel compact, plus len(sAd) < active_nodes
@@ -150,11 +130,9 @@ __global__ void count_Nbhs(int* cList, int* ngh, int* result, size_t active_node
 __global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* elemList, size_t active_nodes, size_t* elemListSize, int* ngh_dev, TetraConfig* shapes_dev) {
     unsigned int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if(tid == 0) {
-
         *elemListSize = 
         sAd[active_nodes - 1] + 
         nbhNr[active_nodes - 1];
-        
     }
     if(tid < active_nodes) {
         int begin = ngh_dev[cList[tid]];
@@ -171,7 +149,6 @@ __global__ void gather_elements(int* sAd, int* cList, int* nbhNr, TetraConfig* e
 // elemList contains neighbouring tetrahedra of each node in active list (cList)
 template <int D, typename Float>
 __global__ void constructPredicate(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* predicate, Float* M_dev, Float tol, int* active_list_dev, int domain_begin, int domain_size) {
-
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
@@ -214,7 +191,6 @@ __global__ void constructPredicate(TetraConfig* elemList, size_t* elemListSize, 
     __syncthreads();
 
     if(elemList_index < upper_bound) {
-
         int pred = std::abs(old_sol - shared_sol) < tol * (1 + 0.5 * (shared_sol + old_sol));
         if(pred == 1) {
             for(int j = 0; j < D + 1; j++) {
@@ -225,24 +201,17 @@ __global__ void constructPredicate(TetraConfig* elemList, size_t* elemListSize, 
                     }
                 }
             }
-
             // we set to 2 converged nodes: active_list[node]=2
             if(threadIdx.x == 0) {
                 active_list_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1] - domain_begin] = 2;
             }
-        
-            
         }
 
         // solution [node] = min(solution[node],shared sol)
         if(threadIdx.x == 0) {
             atomicSwapIfLess<Float>(&solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]], shared_sol);
-
         }
     }
-
-
-
 }
 
 
@@ -256,17 +225,14 @@ __global__ void removeConvergedNodes(int* active_list, int size) {
             active_list[tid] = 0;
         }
     }
-
 }
 
 // process all nodes set for further processing
 template <int D, typename Float>
 __global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int active_nodes, int* sAddr, int* tetra_dev, Float* geo_dev, Float* solutions_dev, int* active_list, Float* M_dev, Float tol, int domain_begin) {
-
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
-
 
     int sAddr_index = blockIdx.x;
     int elemList_index = sAddr[sAddr_index] + threadIdx.x;
@@ -308,7 +274,6 @@ __global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int ac
     __syncthreads();
 
     if(elemList_index < upper_bound) {
-        
         if(threadIdx.x == 0) {
             if(shared_sol < old_sol) {
                 // solution[node] <- shared_sol

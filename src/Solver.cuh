@@ -15,15 +15,8 @@
 #include <functional>
 #include <thrust/async/scan.h>
 
-
-
-
 constexpr int NUM_THREADS = 1024;
 constexpr int SIZE_WARP = 32;
-
-
-
-
 
 template <int D,typename Float>
 class Solver {
@@ -46,7 +39,6 @@ public:
 
     // we transfer the necessary data from host to device
     void gpuDataTransfer(){
-        //printf("GPU data transfer started\n");
         // Allocate memory in device
         cudaMalloc(&geo_dev, sizeof(Float) * mesh->getNumberVertices() * D);
         cudaMalloc(&tetra_dev, sizeof(int) * mesh->get_tetra().size());
@@ -62,15 +54,14 @@ public:
         cudaMemcpy(M_dev, mesh->get_M().data(), sizeof(Float) * mesh->get_M().size(), cudaMemcpyHostToDevice);
     }
 
-    //note: PartitionsVertices is an array such that (assuming vertices are clustered according to their subdomain, i.e. )
-    //1)length(PartitionsVertices) == number of subdomains in the mesh
-    //2)PartitionsVertices[i] == k <==> vertices from PartitionsVertices[i-1](inclusive)
+    // note: PartitionsVertices is an array such that (assuming vertices are clustered according to their subdomain, i.e. )
+    // 1)length(PartitionsVertices) == number of subdomains in the mesh
+    // 2)PartitionsVertices[i] == k <==> vertices from PartitionsVertices[i-1](inclusive)
     // to PartitionsVertices[i](exclusive) belong to subdomains i. If i==0,
     // then PartitionsVertices[-1] is assumed to be equals to 0, Moreover PartitionsVertices[i],
     // with 0 <= i < mesh->getPartitionsNumber() - 1, is the index of the first node belonging to subdomain i+1
 
     void solve(std::vector<int> source_nodes, Float tol, Float infinity_value, const std::string& output_file_name){
-
         using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
         using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
         using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
@@ -85,7 +76,6 @@ public:
         std::vector<thrust::device_vector<TetraConfig>> elemLists(mesh->getPartitionsNumber());
         std::vector<thrust::device_vector<int>> predicate(mesh->getPartitionsNumber());
         thrust::device_vector<size_t> elemListSizes(mesh->getPartitionsNumber());
-
 
         for(int i = 0; i < mesh->getPartitionsNumber(); i++) {
             size_t vec_size = getDomainSize(i);
@@ -105,10 +95,9 @@ public:
             cudaStreamCreate(&streams[i]);
         }
 
-
         bool not_converged = true;
         Float* solutions = (Float*)malloc(sizeof(Float) * mesh->getNumberVertices());
-
+        
         while(not_converged) {
             not_converged = false;
             #pragma omp parallel for num_threads(mesh->getPartitionsNumber()) nowait
@@ -119,7 +108,6 @@ public:
                 int numBlocks = domain_size / NUM_THREADS + 1;
                 // we count the number of active nodes (value set to 1 in active_list)
                 int active_nodes = thrust::count(thrust::cuda::par.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), 1);
-                
                 if(active_nodes != 0) {
                     not_converged = true;
                 }
@@ -152,13 +140,11 @@ public:
                                                                                     thrust::raw_pointer_cast(elemLists[domain].data()), active_neighbors_node, thrust::raw_pointer_cast(&elemListSizes[domain]), ngh_dev, shapes_dev);
                         processNodes<D, Float><<<active_neighbors_node, 128, 0, streams[domain]>>>(thrust::raw_pointer_cast(elemLists[domain].data()),thrust::raw_pointer_cast(&elemListSizes[domain]),active_neighbors_node, thrust::raw_pointer_cast(sAddrs[domain].data()),tetra_dev, geo_dev, solutions_dev, thrust::raw_pointer_cast(active_lists_dev[domain].data()), M_dev, tol, begin_domain);
                     }
-
                     removeConvergedNodes<<<numBlocks, NUM_THREADS, 0, streams[domain]>>>(thrust::raw_pointer_cast(active_lists_dev[domain].data()), domain_size);
                     active_nodes = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), 1);
                     // set to 0 predicate[domain]
                     thrust::fill(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 0);
                 }
-
             }
 
             cudaDeviceSynchronize();
@@ -189,13 +175,6 @@ public:
         }
         // free host memory
         delete solutions;
-
-
-
-
-
-
-
     }
 
 
@@ -221,7 +200,7 @@ private:
         cudaDeviceSynchronize();
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
         setSolutionsSources<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, source_nodes.size());
-        cudaCheck("domain cuda set");
+        cudaCheck("Domain CUDA Set");
         cudaDeviceSynchronize();
         cudaFree(source_nodes_dev);
         //std::cout << "source nodes: ";
@@ -234,7 +213,6 @@ private:
                         int domain = getDomain(v);
                         active_lists[domain][v - getBeginDomain(domain)] = 1;
                     }
-
                 }
             }
         }
