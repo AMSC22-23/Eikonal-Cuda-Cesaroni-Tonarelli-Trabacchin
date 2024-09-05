@@ -8,7 +8,6 @@
 // class responsible for the implementation of the local solver
 template <size_t D, typename Float>
 class LocalSolver {
-
     using VectorExt = typename CudaEikonalTraits<Float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<Float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<Float, D>::Matrix;
@@ -24,7 +23,6 @@ public:
         lookup_vertices[8] = 3; // 3 -> 1 0 0 0 -> 2^3=8
 
         int lookup_edges_1[13];
-
         lookup_edges_1[3] = 0;  // edge_01 -> 0 0 1 1 -> 3
         lookup_edges_1[5] = 0;  // edge_02 -> 0 1 0 1 -> 5
         lookup_edges_1[6] = 1;  // edge_12 -> 0 1 1 0 -> 6
@@ -39,7 +37,6 @@ public:
         lookup_edges_2[9] = 3;
         lookup_edges_2[10] = 3;
         lookup_edges_2[12] = 3;
-
 
         Float lambda21;
         Float lambda22;
@@ -74,9 +71,6 @@ public:
         M_prime << alpha1, beta1, gamma1,
                 alpha2, beta2, gamma2,
                 alpha3, beta3, gamma3;
-
-
-
 
         int phi31_gray_code = getGrayCode(0, 2);
         int phi32_gray_code = getGrayCode(1, 2);
@@ -149,8 +143,6 @@ public:
 
 
     __host__ __device__ static Float computeP(VectorExt* coordinates, const Matrix& M, Float lambda1, Float lambda2, int shift, int* lookup_edges_1, int* lookup_edges_2) {
-       
-
         VectorExt lambda ;//{lambda1, lambda2, 1};
         lambda << lambda1, lambda2, 1;
         Float computedP = std::sqrt(lambda.transpose() * ( M * lambda ));
@@ -197,8 +189,7 @@ public:
     __host__ __device__ static bool check_gray(int gray, int & l1_new, int & l2_new) {
         if(gray == 3 || gray == 5 || gray == 6 || gray == 9 || gray == 10 || gray==12) {
             return true;
-        }
-        else {
+        } else {
             auto [l1, l2] = getOriginalNumbers(gray);
             l1_new = l1;
             l2_new = l2;
@@ -206,6 +197,7 @@ public:
             return false;
         }
     }
+
 
     __host__ __device__ static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift, int* lookup_edges_1, int* lookup_edges_2) {
         int k_gray = getGrayCode(k1, k2);
@@ -224,15 +216,13 @@ public:
         l1 = lookup_edges_1[l_gray];
         l2 = lookup_edges_2[l_gray];
 
-
-
         int s_gray = k_gray ^ l_gray;
         int s1 = lookup_edges_1[s_gray];
         int s2 = lookup_edges_2[s_gray];
         int sign = (2 * (s_gray > k_gray) - 1) * (2 * (s_gray > l_gray) - 1) * sign1 * sign2;
         return sign * 0.5 * (M[getMIndex(k1, k2)] + M[getMIndex(l1, l2)] - M[getMIndex(s1, s2)]);
-
     }
+
 
     __host__ __device__ static Float computeScalarProductDiagonal(int k1, int k2, int l1, int l2, const Float* M, int shift, int* lookup_edges_1, int* lookup_edges_2) {
         int k_gray = getGrayCode(k1, k2);
@@ -242,9 +232,7 @@ public:
         k_gray = k_gray_rotated;
         k1 = lookup_edges_1[k_gray];
         k2 = lookup_edges_2[k_gray];
-
         return  M[getMIndex(k1,k2)];
-
     }
 
     // method to retrieve edge
@@ -278,7 +266,7 @@ public:
             return std::make_tuple(2,3); // edge_23
         }
         else {
-            printf("wrong gray code double %d\n", gray);
+            printf("Wrong gray code double %d\n", gray);
             return std::make_tuple(0,0);
         }
     }

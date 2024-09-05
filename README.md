@@ -12,7 +12,7 @@ that is encountered in problems of wave propagation. <br>
 
 An Eikonal equation is one of the form:
 
-$$\begin{cases} 
+$$\begin{cases}
 H(x, \nabla u(x)) = 1 & \quad x \in \Omega \subset \mathbb{R}^d \\  
 u(x) = g(x) & \quad x \in \Gamma \subset \partial\Omega 
 \end{cases} $$
@@ -38,7 +38,7 @@ where $c$ represents the celerity of the wave.
 
 ## Description
 
-The project is a CUDA library designed for computing the Eikonal equation based on the FSM algorithm on 3D unstructured tetrahedrical meshes. It is designed to be highly extensible, and easy to integrate in different applications.<br>
+The project is a CUDA library designed for computing the Eikonal equation based on the FIM algorithm on 3D unstructured tetrahedrical meshes. It is designed to be highly extensible, and easy to integrate in different applications.<br>
 
 This repository contains a main component, `src`, which is a library for the computation of the numerical solution of the Eikonal equation described in the introduction paragraph. The library contains:
 - `Mesh` which is a class that represents a mesh in 3D.
@@ -49,7 +49,8 @@ For more details, always refer to the documentation.
  The repo also contains an utility component, `test`, which contains a test case and some input meshes.
 
 ## Usage
-After cloning the repo with the command `git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, 
+After cloning the repo with the command 
+`git clone https://github.com/AMSC22-23/Eikonal-Cuda-Cesaroni-Tonarelli-Trabacchin.git`, 
 the installation of [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview) and [GKlib](https://github.com/KarypisLab/GKlib) software is required. To install them, access the repo and run the following:
 ```bash
 $ ./install_dependences.sh
@@ -58,8 +59,7 @@ Moreover, Eigen should be already installed, and its location should be provided
 If no location is provided, a default one will be attempted.
 Then, to build the executable, from the root folder run the following commands:
 ```bash
-
-
+$ mkdir build
 $ cd build
 $ cmake .. -DEIGEN_DIR=<EigenLocation>
 $ make
@@ -74,14 +74,12 @@ where:
 - `num-partitions` is the number of partitions dividing the domain.
 - `output-filename` is the name of the output file. The file will be located in the folder `test/meshes/output_meshes`.
 
-However, these are only examples. To fully exploit our library, it should be directly used in code to access further 
-features, such as the possibility to modify the velocity matrix and the boundary conditions (which in our example are 
-defaulted respectively to the identity matrix and the vertex nearest to the origin).
+However, these are only examples. To fully exploit our library, it should be directly used in code to access further features, such as the possibility to modify the velocity matrix and the boundary conditions (which in our example are defaulted respectively to the identity matrix and the vertex nearest to the origin).
 
 We provide test meshes at this [link](https://drive.google.com/drive/folders/12RzhUeLXBtaghX2UrWTKeBanNaRocNOn?usp=sharing).<br> 
 One example is:
 ```bash
-$ ./eikoanl ../test/meshes/input_meshes/cube-5.vtk 4 output-cube5
+$ ./eikonal ../test/meshes/input_meshes/cube-5.vtk 4 output-cube5
 ```
 will execute the algorithm on a cubic test model and will save the output into the file `output-cube5`.
 
