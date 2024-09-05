@@ -14,6 +14,7 @@ class LocalSolver {
 
 public:
     //M is supposed to point at the beginning of the relevant fragment of the M array (M is a 6-element array)
+    // values stores solutions on nodes of the tetrahedra
     __host__ __device__ static Float solve(VectorExt* coordinates, VectorV values, const Float* M,  int shift) {
 
         int lookup_vertices[9];
@@ -75,6 +76,7 @@ public:
         int phi31_gray_code = getGrayCode(0, 2);
         int phi32_gray_code = getGrayCode(1, 2);
         int phi31_gray_code_rotated, phi31_gray_code_rotated_sign, phi32_gray_code_rotated, phi32_gray_code_rotated_sign;
+        // perform rotation
         rotate(phi31_gray_code, shift, &phi31_gray_code_rotated, &phi31_gray_code_rotated_sign);
         rotate(phi32_gray_code, shift, &phi32_gray_code_rotated, &phi32_gray_code_rotated_sign);
 
@@ -82,7 +84,7 @@ public:
         int phi31_actual_index2 = lookup_edges_2[phi31_gray_code_rotated];
         int phi32_actual_index1 = lookup_edges_1[phi32_gray_code_rotated];
         int phi32_actual_index2 = lookup_edges_2[phi32_gray_code_rotated];
-
+        // solve the system
         solve3D(phi31_gray_code_rotated_sign*(values[phi31_actual_index2] - values[phi31_actual_index1]), phi32_gray_code_rotated_sign*(values[phi32_actual_index2] - values[phi32_actual_index1]), alpha1, alpha2, alpha3, beta1, beta2, beta3, gamma1, gamma2, gamma3, &lambda11, &lambda21, &lambda12, &lambda22);
 
         bool acceptable11 = !std::isnan(lambda11) && lambda11 > 0 && lambda11 < 1;
@@ -123,7 +125,7 @@ public:
         }
     }
 
-
+    // phi4 = lambda1*phi1 + lambda2*phi2 + (1-lambda1-lambda2)*phi3 + sqrt(lambda^T*M*lambda)
     __host__ __device__ static Float computeSolution3D(Float lambda1, Float lambda2, VectorV& values, VectorExt* coordinates, const Matrix& M, int shift, int* lookup_vertices, int* lookup_edges_1, int* lookup_edges_2) {
         int rotated_0;
         int sign_0_ignore;
@@ -141,7 +143,7 @@ public:
                + computeP(coordinates, M, lambda1, lambda2, shift, lookup_edges_1, lookup_edges_2);
     }
 
-
+    // lambda^T*M*lambda
     __host__ __device__ static Float computeP(VectorExt* coordinates, const Matrix& M, Float lambda1, Float lambda2, int shift, int* lookup_edges_1, int* lookup_edges_2) {
         VectorExt lambda ;//{lambda1, lambda2, 1};
         lambda << lambda1, lambda2, 1;
@@ -149,7 +151,9 @@ public:
         return computedP;
     }
 
-
+   // method to solve directly the non-linear system.
+   // phi1 is phi1,3
+   // phi2 is phi2,3
     __host__ __device__ static void solve3D(Float phi1, Float phi2, Float alpha1, Float alpha2, Float alpha3, Float beta1,
                                             Float beta2, Float beta3, Float gamma1, Float gamma2, Float gamma3,
                                             Float* lambda11, Float* lambda21, Float* lambda12, Float* lambda22) {
@@ -169,7 +173,7 @@ public:
         k = phi1_phi1 * gamma3 - alpha3_alpha3;
 
         a_hat = d * b * b / (a * a) + e - f * b / a;
-        b_hat = 2 * b * c * d / (a * a) - f * c / a - b * g / a + h;
+        b_hat = 2 * b * c * d / (a * a) + f * c / a - b * g / a + h;
         c_hat = k + d * c * c / (a * a) - c * g / a;
 
         delta = std::sqrt(b_hat * b_hat - 4 * a_hat * c_hat);
@@ -181,12 +185,12 @@ public:
             *lambda21 = (-b_hat + delta) / (2 * a_hat);
             *lambda22 = 2 * c_hat / (-b_hat + delta);
         }
-
+        // lambda1 = (-blambda2-c)/a
         *lambda11 = (- b * (*lambda21) - c) / a;
         *lambda12 = (- b * (*lambda22) - c) / a;
     }
 
-    __host__ __device__ static bool check_gray(int gray, int & l1_new, int & l2_new) {
+/*    __host__ __device__ static bool check_gray(int gray, int & l1_new, int & l2_new) {
         if(gray == 3 || gray == 5 || gray == 6 || gray == 9 || gray == 10 || gray==12) {
             return true;
         } else {
@@ -197,7 +201,7 @@ public:
             return false;
         }
     }
-
+*/
 
     __host__ __device__ static Float computeScalarProduct(int k1, int k2, int l1, int l2, const Float* M, int shift, int* lookup_edges_1, int* lookup_edges_2) {
         int k_gray = getGrayCode(k1, k2);
@@ -292,11 +296,12 @@ public:
     }
 
 
-    //ok
+
     __host__ __device__ static int getMIndex(int s1, int s2) {
         return (1<<(s2-1)) - 1 + s1;
     }
 
+    // Function to rotate the bits by a certain number of positions (shift), producing the rotated result.
     //return 0 if sign is +, -1 otherwise
     __host__ __device__ static void rotate(int k, int shift, int * result, int * sign) {
         int carry = (k << (4 - shift)) & 0x0000000F;

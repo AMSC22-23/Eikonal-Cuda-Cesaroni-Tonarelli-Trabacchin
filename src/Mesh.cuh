@@ -418,9 +418,9 @@ public:
         return ngh;
     }
 
-    const std::vector<int>& get_partitions() const {
+    /*const std::vector<int>& get_partitions() const {
         return partitions_vertices;
-    }
+    }*/
 
 
 protected:
