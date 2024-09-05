@@ -15,10 +15,12 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstdio>
+#include <chrono>
+#include "../lib/METIS/include/metis.h"x
 #include "../src/CudaEikonalTraits.cuh"
 #define IDXTYPEWIDTH 32
 #define REALTYPEWIDTH 64
-#include "../lib/METIS/include/metis.h"
+
 
 // struct storing the index associated to the tetrahedron and
 // its configuration (we have 4 possible configurations)
@@ -42,6 +44,7 @@ public:
 
     Mesh(const std::string& mesh_file_path, int nparts, const std::string& matrix_file_path) : partitions_number(nparts){
         // we read the mesh from file and store the tetrahedra in sets, each set element represents a tetrahedron
+        auto start1 = std::chrono::high_resolution_clock::now();
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
         
         tetra.resize(sets.size() * (D+1));
@@ -92,9 +95,13 @@ public:
                 cont++;
             }
         }
+        auto stop1 = std::chrono::high_resolution_clock::now();
+        std::cout << "Mesh Constr time (microseconds) = " <<
+                  std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
     }
 
     Mesh(const std::string& mesh_file_path, int nparts, const Matrix& velocity) : partitions_number(nparts){
+        auto start1 = std::chrono::high_resolution_clock::now(); 
         // sets contains the tetrahedra. Each set element represents a tetrahedron
         std::set<std::set<int>> sets = Mesh<D, Float>::init_mesh(mesh_file_path, 4);
         // tetra is filled with the indices of the vertices that form the tetrahedron
@@ -150,11 +157,15 @@ public:
                 cont++;
             }
         }
+        auto stop1 = std::chrono::high_resolution_clock::now();
+        std::cout << "Mesh Constr time (microseconds) = " <<
+                  std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
     }
 
 
     void execute_metis_api(const std::vector<Matrix>& tempM) {
         if(partitions_number > 1) {
+            auto start2 = std::chrono::high_resolution_clock::now();
             idx_t tetra_number = tetra.size()/(D+1);
             idx_t vertices_number = geo.size()/D;
             idx_t objval;
@@ -173,9 +184,13 @@ public:
                 std::cout << metis_result << std::endl;
                 exit(-1);
             }
+            auto stop2 = std::chrono::high_resolution_clock::now();
+            std::cout << "Metis time (microseconds)= " <<
+                  std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
             reorderPartitions(parts_vertices);
             reorderTetra(parts_tetra, tempM);
         } else {
+            std::cout << "Metis time = 0" << std::endl;
             std::vector<int> parts(getNumberVertices(), 0);
             reorderPartitions(parts);
             parts = std::vector<int>(getNumberTetra(), 0);
