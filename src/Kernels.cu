@@ -196,7 +196,7 @@ __global__ void constructPredicate(TetraConfig* elemList, size_t* elemListSize, 
             for(int j = 0; j < D + 1; j++) {
                 // for each node in tetra except for the node
                 if(j != tetra.tetra_config - 1) {
-                    if(solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + j]] - shared_sol > 0) {
+                    if(solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + j]] - shared_sol > tol) {
                         predicate[tetra_dev[(D+1) * tetra.tetra_index + j]] = 1;
                     }
                 }

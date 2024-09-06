@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]){
     constexpr int D = 3;
-    const double tol = 1e-3;
+    const double tol = 1e-1;
     using VectorExt = typename CudaEikonalTraits<float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<float, D>::Matrix;

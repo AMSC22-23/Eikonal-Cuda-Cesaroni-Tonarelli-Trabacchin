@@ -61,7 +61,7 @@ public:
         // we read the matrices from file and store them in a vector of matrices
         std::vector<Matrix> tempM = readMatrices(matrix_file_path);
         // perform the partition with Metis providing the vector of matrices
-        execute_metis_api(tempM);
+        execute_metis(tempM);
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -197,6 +197,9 @@ public:
                   std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
             reorderPartitions(parts_vertices);
             reorderTetra(parts_tetra, tempM);
+
+            
+
         } else {
             std::cout << "Metis time = 0" << std::endl;
             std::vector<int> parts(getNumberVertices(), 0);
