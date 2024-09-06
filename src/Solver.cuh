@@ -95,18 +95,23 @@ public:
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
             cudaStreamCreate(&streams[i]);
         }
+        auto start1 = std::chrono::high_resolution_clock::now();
+        auto stop1 = std::chrono::high_resolution_clock::now();
 
         bool not_converged = true;
         int maximum_neighbour_tetra = mesh->get_maximum_neighbour_tetra();
         Float* solutions = (Float*)malloc(sizeof(Float) * mesh->getNumberVertices());
+        double comm_time = 0;
         #pragma omp parallel default(shared) num_threads(mesh->getPartitionsNumber())
         {
             while(not_converged) {
+                #pragma omp single
+                {
+                    not_converged = false;    
+                }
+                #pragma omp barrier                
                 
-                not_converged = false;
-                
-                
-                #pragma omp parallel for nowait
+                #pragma omp for nowait
                 for(int domain = 0; domain < mesh->getPartitionsNumber(); domain++) {
                     size_t domain_size = getDomainSize(domain);
                     size_t begin_domain = getBeginDomain(domain);
@@ -115,10 +120,10 @@ public:
                     // we count the number of active nodes (value set to 1 in active_list)
                     int active_nodes = thrust::count(thrust::cuda::par_nosync.on(streams[domain]), active_lists_dev[domain].begin(), active_lists_dev[domain].end(), 1);
                     if(active_nodes != 0) {
-                        //#pragma omp critical
-                        //{
+                        #pragma omp critical
+                        {
                             not_converged = true;
-                        //}
+                        }
                         
                     }
                     while(active_nodes > 0) {
@@ -156,10 +161,15 @@ public:
                         thrust::fill(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 0);
                     }
                 }
+                #pragma omp barrier
                 //#pragma omp single
                 //{
                     cudaDeviceSynchronize();    
                 //}
+                /*#pragma omp single
+                {
+                    start1 = std::chrono::high_resolution_clock::now();
+                }*/
 
                 //cudaDeviceSynchronize();
 
@@ -178,7 +188,14 @@ public:
 
                     //#pragma omp single
                     //{
+                        #pragma omp barrier
                         cudaDeviceSynchronize();
+                        /*#pragma omp single
+                        {
+                            stop1 = std::chrono::high_resolution_clock::now();
+                            comm_time += std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count();
+                            //std::cout << "comm time =  " << std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1).count() << std::endl;
+                        }*/
                     //}
                 }
             }
@@ -195,6 +212,7 @@ public:
         }
         // free host memory
         delete solutions;
+        //std::cout << "comm_time = " << comm_time << std::endl;
     }
 
 
