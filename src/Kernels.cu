@@ -242,9 +242,10 @@ __global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int ac
     VectorExt coordinates[4];
     VectorV values;
     TetraConfig tetra;
-    int tetra_dev_val = tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1];
+    int tetra_dev_val;
     if(elemList_index < upper_bound) {
         tetra = elemList[elemList_index];
+        tetra_dev_val = tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1];
         if(active_list[tetra_dev_val - domain_begin] != 0) {
             return;
         }
