@@ -242,13 +242,14 @@ __global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int ac
     VectorExt coordinates[4];
     VectorV values;
     TetraConfig tetra;
+    int tetra_dev_val = tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1];
     if(elemList_index < upper_bound) {
         tetra = elemList[elemList_index];
-        if(active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] != 0) {
+        if(active_list[tetra_dev_val - domain_begin] != 0) {
             return;
         }
         // old_sol = solution[node], node is index of the node associated with tetra.config
-        old_sol = solutions_dev[tetra_dev[(D+1) * tetra.tetra_index + tetra.tetra_config - 1]];
+        old_sol = solutions_dev[tetra_dev_val];
         if(threadIdx.x == 0) {
             shared_sol = old_sol;
         }
@@ -277,9 +278,9 @@ __global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int ac
         if(threadIdx.x == 0) {
             if(shared_sol < old_sol) {
                 // solution[node] <- shared_sol
-                solutions_dev[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1]] = shared_sol;
+                solutions_dev[tetra_dev_val] = shared_sol;
                 // active_lis[node] <- 1
-                active_list[tetra_dev[tetra.tetra_index * (D+1) + tetra.tetra_config - 1] - domain_begin] = 1;
+                active_list[tetra_dev_val - domain_begin] = 1;
             }
         }
     }

@@ -111,7 +111,7 @@ public:
                 }
                 #pragma omp barrier                
                 
-                #pragma omp for nowait
+                #pragma omp for
                 for(int domain = 0; domain < mesh->getPartitionsNumber(); domain++) {
                     size_t domain_size = getDomainSize(domain);
                     size_t begin_domain = getBeginDomain(domain);
@@ -161,7 +161,6 @@ public:
                         thrust::fill(thrust::cuda::par_nosync.on(streams[domain]), predicate[domain].begin() + begin_domain, predicate[domain].begin() + end_domain, 0);
                     }
                 }
-                #pragma omp barrier
                 //#pragma omp single
                 //{
                     cudaDeviceSynchronize();    
@@ -174,7 +173,7 @@ public:
                 //cudaDeviceSynchronize();
 
                 // propagate predicate
-                    #pragma omp for nowait
+                    #pragma omp for
                     for(int domain = 0; domain < mesh->getPartitionsNumber() && not_converged; domain++) {
                         size_t domain_size = getDomainSize(domain);
                         size_t begin_domain = getBeginDomain(domain);
@@ -188,7 +187,6 @@ public:
 
                     //#pragma omp single
                     //{
-                        #pragma omp barrier
                         cudaDeviceSynchronize();
                         /*#pragma omp single
                         {
@@ -234,10 +232,10 @@ private:
         cudaMalloc(&source_nodes_dev, sizeof(int) * source_nodes.size());
         cudaMemcpy(source_nodes_dev, source_nodes.data(), sizeof(int) * source_nodes.size(), cudaMemcpyHostToDevice);
         int numBlocksInfinity = mesh->getNumberVertices() / NUM_THREADS + 1;
-        setSolutionsToInfinity<<<NUM_THREADS, numBlocksInfinity>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
+        setSolutionsToInfinity<<<numBlocksInfinity, NUM_THREADS>>>(solutions_dev, infinity_value, mesh->getNumberVertices());
         cudaDeviceSynchronize();
         int numBlocksSources = source_nodes.size() / SIZE_WARP + 1;
-        setSolutionsSources<<<SIZE_WARP, numBlocksSources>>>(solutions_dev, source_nodes_dev, source_nodes.size());
+        setSolutionsSources<<<numBlocksSources, SIZE_WARP>>>(solutions_dev, source_nodes_dev, source_nodes.size());
         cudaCheck("Domain CUDA Set");
         cudaDeviceSynchronize();
         cudaFree(source_nodes_dev);
