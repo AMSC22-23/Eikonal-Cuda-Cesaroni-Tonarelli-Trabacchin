@@ -159,7 +159,8 @@ public:
                     }
                 }
 
-                    cudaDeviceSynchronize();    
+                    cudaDeviceSynchronize();   
+                    #pragma omp barrier 
 
 
                 // propagate predicate
@@ -176,6 +177,7 @@ public:
                     }
 
                         cudaDeviceSynchronize();
+                        #pragma omp barrier
 
                 }
             }
