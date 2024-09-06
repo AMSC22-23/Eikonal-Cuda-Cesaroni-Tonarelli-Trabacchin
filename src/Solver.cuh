@@ -194,7 +194,7 @@ public:
         // copy solutions back to host
         cudaMemcpy(solutions, solutions_dev, sizeof(Float) * mesh->getNumberVertices(), cudaMemcpyDeviceToHost);
         // write solution to file
-        //mesh->getSolutionsVTK(output_file_name, solutions);
+        mesh->getSolutionsVTK(output_file_name, solutions);
         // destroy streams
         for(int i = 0; i < mesh->getPartitionsNumber(); i++){
             cudaStreamDestroy(streams[i]);

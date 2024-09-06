@@ -323,7 +323,7 @@ public:
         return shapes;
     }
 
-    const int get_maximum_neighbour_tetra() const {
+    int get_maximum_neighbour_tetra() const {
         return max_neighbour_tetra;
     }
 

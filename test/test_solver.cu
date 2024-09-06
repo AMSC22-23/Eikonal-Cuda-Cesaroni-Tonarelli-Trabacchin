@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]){
     constexpr int D = 3;
-    const double tol = 1e-1;
+    const double tol = 1e-3;
     using VectorExt = typename CudaEikonalTraits<float, D>::VectorExt;
     using VectorV = typename CudaEikonalTraits<float, D>::VectorV;
     using Matrix = typename CudaEikonalTraits<float, D>::Matrix;
@@ -38,6 +38,13 @@ int main(int argc, char* argv[]){
         // Setting boundary
         std::vector<int> boundary;
         boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 0, 0})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 1, 0})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 0, 0})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 1, 0})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 0, 1})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 1, 1})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 0, 1})));
+        boundary.push_back(mesh.getNearestVertex(std::array<float, D>({0, 1, 1})));
 
         //boundary.push_back(mesh.getNearestVertex(std::array<float, D>({1, 1, 1})));
 
