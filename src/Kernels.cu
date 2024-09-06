@@ -279,7 +279,8 @@ __global__ void processNodes(TetraConfig* elemList, size_t* elemListSize, int ac
         if(threadIdx.x == 0) {
             if(shared_sol < old_sol) {
                 // solution[node] <- shared_sol
-                solutions_dev[tetra_dev_val] = shared_sol;
+                atomicSwapIfLess<Float>(&solutions_dev[tetra_dev_val], shared_sol);
+                //solutions_dev[tetra_dev_val] = shared_sol;
                 // active_lis[node] <- 1
                 active_list[tetra_dev_val - domain_begin] = 1;
             }
