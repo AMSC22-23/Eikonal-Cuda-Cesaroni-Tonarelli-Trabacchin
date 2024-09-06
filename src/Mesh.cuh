@@ -49,7 +49,6 @@ public:
         tetra.resize(sets.size() * (D+1));
         int i = 0;
         for(auto &t : sets) {
-            if(t.size() != D+1) continue;
             int j = 0;
             for(auto &v : t) {
                 tetra[i+j] = v;
@@ -61,7 +60,7 @@ public:
         // we read the matrices from file and store them in a vector of matrices
         std::vector<Matrix> tempM = readMatrices(matrix_file_path);
         // perform the partition with Metis providing the vector of matrices
-        execute_metis(tempM);
+        execute_metis_api(tempM);
 
         std::vector<std::vector<int>> g;
         g.resize(getNumberVertices());
@@ -70,6 +69,15 @@ public:
                 g[tetra[j+i]].push_back(i/(D+1));
             }
         }
+
+        //check
+        int max = 0;
+        for(int i = 0; i < g.size(); i++) {
+            if(g[i].size() > max) {
+                max = g[i].size();
+            }
+        }
+        max_neighbour_tetra = max;
 
         ngh.resize(getNumberVertices());
         ngh[0] = 0;
